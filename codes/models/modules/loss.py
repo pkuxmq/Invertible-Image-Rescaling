@@ -1,5 +1,50 @@
 import torch
 import torch.nn as nn
+import numpy as np
+
+class MMDLoss(nn.Module):
+    def __init__(self, config):
+        super(MMDLoss, self).__init__()
+        self.c = config
+
+    def MMD_matrix_multiscale(self, x, y, width_exponents):
+        x = x.reshape([x.shape[0], -1])
+        y = y.reshape([y.shape[0], -1])
+        xx, yy, xy = torch.mm(x, x.t()), torch.mm(y, y.t()), torch.mm(x, y.t())
+
+        rx = (xx.diag().unsqueeze(0).expand_as(xx))
+        ry = (yy.diag().unsqueeze(0).expand_as(yy))
+
+        dxx = torch.clamp(rx.t() + rx - 2 * xx, 0, np.inf)
+        dyy = torch.clamp(ry.t() + ry - 2 * yy, 0, np.inf)
+        dxy = torch.clamp(rx.t() + ry - 2 * xy, 0, np.inf)
+
+        XX, YY, XY = (torch.zeros(xx.shape).to(self.c.device), torch.zeros(yy.shape).to(self.c.device), torch.zeros(xy.shape).to(self.c.device))
+
+        for C, a in width_exponents:
+            XX += C**a * ((C + dxx) / a)**-a
+            YY += C**a * ((C + dyy) / a)**-a
+            XY += C**a * ((C + dxy) / a)**-a
+
+        return XX + YY - 2 * XY
+
+    def forward(self, x0, x1):
+        return self.MMD_matrix_multiscale(x0, x1, self.c.mmd_kernels)
+
+class ReconstructionLoss(nn.Module):
+    def __init__(self):
+        super(ReconstructionLoss, self).__init__()
+
+    def forward(self, x, target):
+        return torch.mean(torch.sum((x - target)**2, (1, 2, 3)))
+
+def l2_dist_matrix(x, y):
+    xx, yy, xy = torch.mm(x, x.t()), torch.mm(y, y.t()), torch.mm(x, y.t())
+
+    rx = (xx.diag().unsqueeze(0).expand_as(xx))
+    ry = (yy.diag().unsqueeze(0).expand_as(yy))
+
+    return torch.clamp(rx.t() + ry - 2 * xy, 0, np.inf)
 
 
 class CharbonnierLoss(nn.Module):

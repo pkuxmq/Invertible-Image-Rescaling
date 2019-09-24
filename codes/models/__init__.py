@@ -5,7 +5,9 @@ logger = logging.getLogger('base')
 def create_model(opt):
     model = opt['model']
 
-    if model == 'sr':
+    if model == 'inv-sr':
+        from .Inv_model import InvSRModel as M
+    elif model == 'sr':
         from .SR_model import SRModel as M
     elif model == 'srgan':
         from .SRGAN_model import SRGANModel as M
