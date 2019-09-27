@@ -26,6 +26,11 @@ class MMDLoss(nn.Module):
             YY += C**a * ((C + dyy) / a)**-a
             XY += C**a * ((C + dxy) / a)**-a
 
+        #print(XX)
+        #print(YY)
+        #print(XY)
+        #print(XX+YY-2*XY)
+
         return XX + YY - 2 * XY
 
     def forward(self, x0, x1):

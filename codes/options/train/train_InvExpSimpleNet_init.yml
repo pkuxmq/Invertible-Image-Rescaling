@@ -16,7 +16,7 @@ distortion: sr
 
 scale: 4
 
-gpu_ids: [2]
+gpu_ids: [0]
 
 
 

@@ -96,24 +96,27 @@ class InvSRModel(BaseModel):
 
     def loss_forward(self, out, y):
         output_block_grad = torch.cat((out[:, :3, :, :], out[:, 3:, :, :].data), dim=1)
-        y_short = torch.cat((y[:, :3, :, :], out[:, 3:, :, :]), dim=1)
+        y_short = torch.cat((y[:, :3, :, :], y[:, 3:, :, :]), dim=1)
 
         l_forw_fit = self.train_opt['lambda_fit_forw'] * self.Reconstruction(out[:, :3, :, :], y[:, :3, :, :])
         l_forw_mmd = self.train_opt['lambda_mmd_forw'] * torch.mean(self.MMD_forward(output_block_grad, y_short))
 
-        print(l_forw_fit.item(), l_forw_mmd.item())
+        z = out[:, 3:, :, :].reshape([out.shape[0], -1])
+        l_forw_mle = self.train_opt['lambda_mle_forw'] * torch.sum(torch.norm(z, p=2, dim=1))
 
-        return l_forw_fit + l_forw_mmd
+        #print(l_forw_fit.item(), l_forw_mmd.item(), l_forw_mle.item())
 
-    def loss_backward_mmd(self, x, y):
+        return l_forw_fit, l_forw_mmd, l_forw_mle
+
+    def loss_backward(self, x, y):
         x_samples = self.netG(y, rev=True)
         MMD = self.MMD_backward(x, x_samples)
         l_back_mmd = self.train_opt['lambda_mmd_back'] * torch.mean(MMD)
         l_back_rec = self.train_opt['lambda_rec_back'] * self.Reconstruction(x, x_samples)
 
-        print(l_back_mmd.item(), l_back_rec.item())
+        #print(l_back_mmd.item(), l_back_rec.item())
 
-        return l_back_mmd + l_back_rec
+        return l_back_mmd, l_back_rec
 
     #def loss_backward_rec(self, out_y, y, x):
         
@@ -123,8 +126,33 @@ class InvSRModel(BaseModel):
         self.output = self.netG(self.real_H)
         zshape = self.output[:, 3:, :, :].shape
         y = torch.cat((self.var_L, self.noise_batch(zshape)), dim=1)
-        loss = self.loss_forward(self.output, y) + self.loss_backward_mmd(self.real_H, y)
-        print(loss.item())
+        #loss = self.loss_forward(self.output, y) + self.loss_backward(self.real_H, y)
+
+        if self.train_opt['use_learned_y']:
+            yy = torch.cat((self.output[:, :3, :, :], self.noise_batch(zshape)), dim=1)
+        else:
+            yy = y
+
+        l_forw_fit, l_forw_mmd, l_forw_mle = self.loss_forward(self.output, y)
+
+        if (self.train_opt['lambda_rec_back'] == 0.0 and self.train_opt['not_use_back_mmd']):
+            l_back_mmd, l_back_rec = 0, 0
+        else:
+            l_back_mmd, l_back_rec = self.loss_backward(self.real_H, yy)
+
+        if self.train_opt['use_stage']:
+            if step < self.train_opt['stage1_step']:
+                l_back_rec = 0
+
+        loss = l_forw_fit + l_back_rec + l_forw_mle
+
+        if not self.train_opt['not_use_forw_mmd']:
+            loss += l_forw_mmd
+
+        if not self.train_opt['not_use_back_mmd']:
+            loss += l_back_mmd
+
+        #print(loss.item())
 
         loss.backward()
 
@@ -144,6 +172,13 @@ class InvSRModel(BaseModel):
         self.netG.eval()
         with torch.no_grad():
             self.fake_H = self.netG(y, rev=True)
+            
+            self.forw_L = self.netG(self.real_H)[:, :3, :, :]
+
+        y_forw = torch.cat((self.forw_L, self.noise_batch(zshape)), dim=1)
+        with torch.no_grad():
+            self.fake_H_forw = self.netG(y_forw, rev=True)
+
         self.netG.train()
 
     #def test_x8(self):
@@ -189,6 +224,8 @@ class InvSRModel(BaseModel):
         out_dict = OrderedDict()
         out_dict['LQ'] = self.var_L.detach()[0].float().cpu()
         out_dict['SR'] = self.fake_H.detach()[0].float().cpu()
+        out_dict['LR'] = self.forw_L.detach()[0].float().cpu()
+        out_dict['SR_forw'] = self.fake_H_forw.detach()[0].float().cpu()
         if need_GT:
             out_dict['GT'] = self.real_H.detach()[0].float().cpu()
         return out_dict
