@@ -30,16 +30,24 @@ class InvBlock(nn.Module):
 
 
 class InvBlockExp(nn.Module):
-    def __init__(self, subnet_constructor, channel_num, channel_split_num):
+    def __init__(self, subnet_constructor, channel_num, channel_split_num, clamp=5.):
         super(InvBlockExp, self).__init__()
 
         self.split_len1 = channel_split_num
         self.split_len2 = channel_num - channel_split_num
 
+        self.clamp = clamp
+
         self.F = subnet_constructor(self.split_len2, self.split_len1)
         self.G = subnet_constructor(self.split_len1, self.split_len2)
         self.H = subnet_constructor(self.split_len1, self.split_len2)
         #print(self)
+
+    def e(self, s):
+        return torch.exp(self.clamp * 0.636 * torch.atan(s))
+
+    def log_e(self, s):
+        return self.clamp * 0.636 * torch.atan(s)
 
     def forward(self, x, rev=False):
         if math.isinf(torch.sum(x)):
@@ -51,9 +59,15 @@ class InvBlockExp(nn.Module):
 
         if not rev:
             y1 = x1 + self.F(x2)
-            y2 = x2.mul(torch.exp(self.H(y1))) + self.G(y1)
+            s1 = self.H(y1)
+            self.s1 = s1
+            t1 = self.G(y1)
+            y2 = x2.mul(self.e(s1)) + t1
         else:
-            y2 = (x2 - self.G(x1)).div(torch.exp(self.H(x1)) + 1e-6)
+            s1 = self.H(x1)
+            self.s1 = s1
+            t1 = self.G(x1)
+            y2 = (x2 - t1).div(self.e(s1))
             y1 = x1 - self.F(y2)
 
         y = torch.cat((y1, y2), 1)
@@ -62,7 +76,18 @@ class InvBlockExp(nn.Module):
         if math.isnan(torch.sum(y)):
             print('Get NaN in the block output')
 
-        return torch.cat((y1, y2), 1)
+        #return torch.cat((y1, y2), 1)
+        return y
+
+    def jacobian(self, x, rev=False):
+        x1, x2 = (x[0].narrow(1, 0, self.split_len1), x[0].narrow(1, self.split_len1, self.split_len2))
+
+        if not rev:
+            jac = torch.sum(self.log_e(self.s1))
+        else:
+            jac = -torch.sum(self.log_e(self.s1))
+
+        return jac
 
 
 class InvBlockSigmoid(nn.Module):
@@ -300,7 +325,7 @@ class InvExpSRNet(nn.Module):
             for op in self.operations:
                 out = op.forward(out, rev)
                 i += 1
-                print('forward sum ' + str(torch.sum(out)))
+                #print('forward sum ' + str(torch.sum(out)))
                 if math.isinf(torch.sum(out)):
                     print('Get INF in forward block ' + str(i))
                     exit()
@@ -312,7 +337,7 @@ class InvExpSRNet(nn.Module):
             for op in reversed(self.operations):
                 out = op.forward(out, rev)
                 i += 1
-                print('backward sum ' + str(torch.sum(out)))
+                #print('backward sum ' + str(torch.sum(out)))
                 if math.isinf(torch.sum(out)):
                     print('Get INF in backward block ' + str(i))
                     exit()

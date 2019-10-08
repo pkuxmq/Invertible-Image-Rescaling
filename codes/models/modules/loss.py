@@ -37,11 +37,20 @@ class MMDLoss(nn.Module):
         return self.MMD_matrix_multiscale(x0, x1, self.c.mmd_kernels)
 
 class ReconstructionLoss(nn.Module):
-    def __init__(self):
+    def __init__(self, losstype='l2', eps=1e-6):
         super(ReconstructionLoss, self).__init__()
+        self.losstype = losstype
+        self.eps = eps
 
     def forward(self, x, target):
-        return torch.mean(torch.sum((x - target)**2, (1, 2, 3)))
+        if self.losstype == 'l2':
+            return torch.mean(torch.sum((x - target)**2, (1, 2, 3)))
+        elif self.losstype == 'l1':
+            diff = x - target
+            return torch.mean(torch.sum(torch.sqrt(diff * diff + self.eps), (1, 2, 3)))
+        else:
+            print("reconstruction loss type error!")
+            return 0
 
 def l2_dist_matrix(x, y):
     xx, yy, xy = torch.mm(x, x.t()), torch.mm(y, y.t()), torch.mm(x, y.t())

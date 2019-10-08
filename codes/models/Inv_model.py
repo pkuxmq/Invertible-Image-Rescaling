@@ -49,7 +49,11 @@ class InvSRModel(BaseModel):
 
             self.MMD_forward = MMDLoss(config_mmd_forw) 
             self.MMD_backward = MMDLoss(config_mmd_back) 
-            self.Reconstruction = ReconstructionLoss()
+
+            if self.train_opt['pixel_criterion']:
+                self.Reconstruction = ReconstructionLoss(losstype=self.train_opt['pixel_criterion'])
+            else:
+                self.Reconstruction = ReconstructionLoss()
 
 
             # optimizers
@@ -110,20 +114,32 @@ class InvSRModel(BaseModel):
 
     def loss_backward(self, x, y):
         x_samples = self.netG(y, rev=True)
-        MMD = self.MMD_backward(x, x_samples)
+        x_samples_image = x_samples[:, :3, :, :]
+        MMD = self.MMD_backward(x, x_samples_image)
         l_back_mmd = self.train_opt['lambda_mmd_back'] * torch.mean(MMD)
-        l_back_rec = self.train_opt['lambda_rec_back'] * self.Reconstruction(x, x_samples)
+        l_back_rec = self.train_opt['lambda_rec_back'] * self.Reconstruction(x, x_samples_image)
+        if self.train_opt['padding_x']:
+            xx = x_samples[:, 3:, :, :].reshape([x_samples.shape[0], -1])
+            l_back_mle = self.train_opt['lambda_mle_back'] * torch.sum(torch.norm(xx, p=2, dim=1))
+        else:
+            l_back_mle = 0
 
         #print(l_back_mmd.item(), l_back_rec.item())
 
-        return l_back_mmd, l_back_rec
+        return l_back_mmd, l_back_rec, l_back_mle
 
     #def loss_backward_rec(self, out_y, y, x):
         
 
     def optimize_parameters(self, step):
         self.optimizer_G.zero_grad()
-        self.output = self.netG(self.real_H)
+        if self.train_opt['padding_x']:
+            self.padding_x_dim = self.train_opt['padding_x']
+            padding_xshape = [self.real_H.shape[0], self.padding_x_dim, self.real_H.shape[2], self.real_H.shape[3]]
+            self.input = torch.cat((self.real_H, self.noise_batch(padding_xshape)), dim=1)
+        else:
+            self.input = self.real_H
+        self.output = self.netG(self.input)
         zshape = self.output[:, 3:, :, :].shape
         y = torch.cat((self.var_L, self.noise_batch(zshape)), dim=1)
         #loss = self.loss_forward(self.output, y) + self.loss_backward(self.real_H, y)
@@ -136,15 +152,20 @@ class InvSRModel(BaseModel):
         l_forw_fit, l_forw_mmd, l_forw_mle = self.loss_forward(self.output, y)
 
         if (self.train_opt['lambda_rec_back'] == 0.0 and self.train_opt['not_use_back_mmd']):
-            l_back_mmd, l_back_rec = 0, 0
+            l_back_mmd, l_back_rec, l_back_mle = 0, 0
         else:
-            l_back_mmd, l_back_rec = self.loss_backward(self.real_H, yy)
+            l_back_mmd, l_back_rec, l_back_mle = self.loss_backward(self.real_H, yy)
+            if self.train_opt['learned_y_par']:
+                _, l_back_rec_bicubic, l_back_mle_bicubic = self.loss_backward(self.real_H, y)
+                l_back_rec = self.train_opt['learned_y_par'] * l_back_rec + (1 - self.train_opt['learned_y_par']) * l_back_rec_bicubic
+                l_back_mle = self.train_opt['learned_y_par'] * l_back_mle + (1 - self.train_opt['learned_y_par']) * l_back_mle_bicubic
 
         if self.train_opt['use_stage']:
             if step < self.train_opt['stage1_step']:
                 l_back_rec = 0
+                l_back_mle = 0
 
-        loss = l_forw_fit + l_back_rec + l_forw_mle
+        loss = l_forw_fit + l_back_rec + l_forw_mle + l_back_mle
 
         if not self.train_opt['not_use_forw_mmd']:
             loss += l_forw_mmd
@@ -167,17 +188,27 @@ class InvSRModel(BaseModel):
 
     def test(self):
         Lshape = self.var_L.shape
-        zshape = [Lshape[0], Lshape[1] * (self.opt['scale']**2 - 1), Lshape[2], Lshape[3]]
+        if self.train_opt['padding_x']:
+            self.padding_x_dim = self.train_opt['padding_x']
+            padding_xshape = [self.real_H.shape[0], self.padding_x_dim, self.real_H.shape[2], self.real_H.shape[3]]
+            self.input = torch.cat((self.real_H, self.noise_batch(padding_xshape)), dim=1)
+            input_dim = self.padding_x_dim + Lshape[1]
+        else:
+            input_dim = Lshape[1]
+            self.input = self.real_H
+
+        zshape = [Lshape[0], input_dim * (self.opt['scale']**2) - Lshape[1], Lshape[2], Lshape[3]]
         y = torch.cat((self.var_L, self.noise_batch(zshape)), dim=1)
+
         self.netG.eval()
         with torch.no_grad():
-            self.fake_H = self.netG(y, rev=True)
+            self.fake_H = self.netG(y, rev=True)[:, :3, :, :]
             
-            self.forw_L = self.netG(self.real_H)[:, :3, :, :]
+            self.forw_L = self.netG(self.input)[:, :3, :, :]
 
         y_forw = torch.cat((self.forw_L, self.noise_batch(zshape)), dim=1)
         with torch.no_grad():
-            self.fake_H_forw = self.netG(y_forw, rev=True)
+            self.fake_H_forw = self.netG(y_forw, rev=True)[:, :3, :, :]
 
         self.netG.train()
 
