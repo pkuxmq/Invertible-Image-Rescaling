@@ -1,0 +1,189 @@
+# Not exactly the same as SRResNet in <Photo-Realistic Single Image Super-Resolution Using a Generative Adversarial Network>
+
+# With 16 Residual blocks w/o BN
+
+
+
+#### general settings
+
+name: 021_InvExpSigmoidSimpleNetInitXavier_wd_nommd_mle_learnedy_block16_x4_scratch_DIV2K
+
+use_tb_logger: true
+
+model: inv-sr
+
+distortion: sr
+
+scale: 4
+
+gpu_ids: [1]
+
+
+
+#### DIV2K
+
+# mean: [0.44845608, 0.43749626, 0.40452776]
+
+# std: [0.27890206, 0.2646495 , 0.28554508]
+
+
+
+
+
+r_mean: 0.44845608
+
+g_mean: 0.43749626
+
+b_mean: 0.40452776
+
+r_std: 0.27890206
+
+g_std: 0.2646495
+
+b_std: 0.28554508
+
+
+
+#### datasets
+
+datasets:
+
+  train:
+
+    name: DIV2K
+
+    mode: LQGT
+
+    dataroot_GT: /home/shuxin/data/DIV2K/DIV2K_train_HR.lmdb
+
+    dataroot_LQ: /home/shuxin/data/DIV2K/DIV2K_train_LR_bicubic/X4.lmdb
+
+
+
+
+
+    use_shuffle: true
+
+    n_workers: 6  # per GPU
+
+    batch_size: 16
+
+    GT_size: 144
+
+    use_flip: true
+
+    use_rot: true
+
+    color: RGB
+
+  val:
+
+    name: val_DIV2K
+
+    mode: LQGT
+
+    dataroot_GT: /home/shuxin/data/DIV2K/DIV2K_valid_HR.lmdb
+
+    dataroot_LQ: /home/shuxin/data/DIV2K/DIV2K_valid_LR_bicubic/X4.lmdb
+
+
+
+#### network structures
+
+network_G:
+
+  which_model_G: InvExpSigmoidSimpleNet
+
+  in_nc: 3
+
+  out_nc: 3
+
+  block_num: [0, 8, 8]
+
+  scale: 4
+
+  init: xavier
+
+
+
+#### path
+
+path:
+
+  pretrain_model_G: ~ 
+
+  strict_load: true
+
+  resume_state: ~
+
+
+
+#### training settings: learning rate scheme, loss
+
+train:
+
+  lr_G: !!float 2e-3
+
+  beta1: 0.9
+
+  beta2: 0.999
+
+  niter: 1600000
+
+  warmup_iter: -1  # no warm up
+
+
+
+  lr_scheme: MultiStepLR
+
+
+
+  lr_steps: [200000, 400000, 600000, 800000, 1000000, 1200000, 1400000]
+
+  lr_gamma: 0.5
+
+
+
+  pixel_criterion: l1
+
+  pixel_weight: 1.0
+
+
+
+  manual_seed: 10
+
+  val_freq: !!float 5e3
+
+
+  mmd_forw_kernels: [(0.2, 2), (1.5, 2), (3.0, 2)]
+
+  mmd_back_kernels: [(0.2, 0.1), (0.2, 0.5), (0.2, 2)]
+
+  lambda_fit_forw: 16.
+
+  lambda_mmd_forw: 1000.
+
+  lambda_mmd_back: 1000
+
+  lambda_rec_back: 1
+
+  lambda_mle_forw: 1
+
+  gradient_clipping: 10
+
+  not_use_forw_mmd: True
+
+  not_use_back_mmd: True
+
+  weight_decay_G: !!float 1e-5
+
+  use_learned_y: True
+
+
+#### logger
+
+logger:
+
+  print_freq: 100
+
+  save_checkpoint_freq: !!float 5e3
