@@ -25,7 +25,9 @@ class InvSRModel(BaseModel):
         else:
             self.rank = -1  # non dist training
         train_opt = opt['train']
+        test_opt = opt['test']
         self.train_opt = train_opt
+        self.test_opt = test_opt
 
         self.netG = networks.define_G(opt).to(self.device)
         if opt['dist']:
@@ -97,6 +99,9 @@ class InvSRModel(BaseModel):
 
     def noise_batch(self, dims):
         return torch.randn(tuple(dims)).to(self.device)
+
+    def zeros_batch(self, dims):
+        return torch.zeros(tuple(dims)).to(self.device)
 
     def loss_forward(self, out, y):
         output_block_grad = torch.cat((out[:, :3, :, :], out[:, 3:, :, :].data), dim=1)
@@ -188,7 +193,7 @@ class InvSRModel(BaseModel):
 
     def test(self):
         Lshape = self.var_L.shape
-        if self.train_opt['padding_x']:
+        if self.train_opt and self.train_opt['padding_x']:
             self.padding_x_dim = self.train_opt['padding_x']
             padding_xshape = [self.real_H.shape[0], self.padding_x_dim, self.real_H.shape[2], self.real_H.shape[3]]
             self.input = torch.cat((self.real_H, self.noise_batch(padding_xshape)), dim=1)
@@ -198,7 +203,12 @@ class InvSRModel(BaseModel):
             self.input = self.real_H
 
         zshape = [Lshape[0], input_dim * (self.opt['scale']**2) - Lshape[1], Lshape[2], Lshape[3]]
-        y = torch.cat((self.var_L, self.noise_batch(zshape)), dim=1)
+
+        noise_scale = 1
+
+        if self.test_opt and self.test_opt['noise_scale']:
+            noise_scale = self.test_opt['noise_scale']
+        y = torch.cat((self.var_L, noise_scale * self.noise_batch(zshape)), dim=1)
 
         self.netG.eval()
         with torch.no_grad():
@@ -206,7 +216,7 @@ class InvSRModel(BaseModel):
             
             self.forw_L = self.netG(self.input)[:, :3, :, :]
 
-        y_forw = torch.cat((self.forw_L, self.noise_batch(zshape)), dim=1)
+        y_forw = torch.cat((self.forw_L, noise_scale * self.noise_batch(zshape)), dim=1)
         with torch.no_grad():
             self.fake_H_forw = self.netG(y_forw, rev=True)[:, :3, :, :]
 

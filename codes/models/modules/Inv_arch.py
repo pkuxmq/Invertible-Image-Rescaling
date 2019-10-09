@@ -30,7 +30,7 @@ class InvBlock(nn.Module):
 
 
 class InvBlockExp(nn.Module):
-    def __init__(self, subnet_constructor, channel_num, channel_split_num, clamp=5.):
+    def __init__(self, subnet_constructor, channel_num, channel_split_num, clamp=1.):
         super(InvBlockExp, self).__init__()
 
         self.split_len1 = channel_split_num
