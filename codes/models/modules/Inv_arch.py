@@ -2,6 +2,7 @@ import math
 import torch
 import torch.nn as nn
 import torch.nn.functional as F
+import numpy as np
 #import models.modules.module_util as mutil
 
 
@@ -27,6 +28,9 @@ class InvBlock(nn.Module):
             y1 = x1 - self.F(y2)
 
         return torch.cat((y1, y2), 1)
+
+    def jacobian(self, x, rev=False):
+        return 0
 
 
 class InvBlockExp(nn.Module):
@@ -80,14 +84,12 @@ class InvBlockExp(nn.Module):
         return y
 
     def jacobian(self, x, rev=False):
-        x1, x2 = (x[0].narrow(1, 0, self.split_len1), x[0].narrow(1, self.split_len1, self.split_len2))
-
         if not rev:
             jac = torch.sum(self.log_e(self.s1))
         else:
             jac = -torch.sum(self.log_e(self.s1))
 
-        return jac
+        return jac / x.shape[0]
 
 
 class InvBlockSigmoid(nn.Module):
@@ -112,9 +114,11 @@ class InvBlockSigmoid(nn.Module):
 
         if not rev:
             y1 = x1 + self.F(x2)
-            y2 = x2.mul(torch.sigmoid(self.H(y1)) * 2) + self.G(y1)
+            self.s = torch.sigmoid(self.H(y1)) * 2
+            y2 = x2.mul(self.s) + self.G(y1)
         else:
-            y2 = (x2 - self.G(x1)).div(torch.sigmoid(self.H(x1)) * 2 + 1e-6)
+            self.s = torch.sigmoid(self.H(x1)) * 2
+            y2 = (x2 - self.G(x1)).div(self.s + 1e-6)
             y1 = x1 - self.F(y2)
 
         y = torch.cat((y1, y2), 1)
@@ -128,6 +132,14 @@ class InvBlockSigmoid(nn.Module):
                 print('sigmoid: ' + str(torch.sigmoid(self.H(y1))))
 
         return torch.cat((y1, y2), 1)
+
+    def jacobian(self, x, rev=False):
+        if not rev:
+            jac = torch.sum(torch.log(self.s))
+        else:
+            jac = -torch.sum(torch.log(self.s))
+
+        return jac / x.shape[0]
 
 
 class InvBlockExpSigmoid(nn.Module):
@@ -152,9 +164,11 @@ class InvBlockExpSigmoid(nn.Module):
 
         if not rev:
             y1 = x1 + self.F(x2)
-            y2 = x2.mul(torch.exp(torch.sigmoid(self.H(y1)) * 2 - 1)) + self.G(y1)
+            self.s = torch.sigmoid(self.H(y1)) * 2 - 1
+            y2 = x2.mul(torch.exp(self.s)) + self.G(y1)
         else:
-            y2 = (x2 - self.G(x1)).div(torch.exp(torch.sigmoid(self.H(x1)) * 2 - 1))
+            self.s = torch.sigmoid(self.H(x1)) * 2 - 1
+            y2 = (x2 - self.G(x1)).div(torch.exp(self.s))
             y1 = x1 - self.F(y2)
 
         y = torch.cat((y1, y2), 1)
@@ -168,6 +182,14 @@ class InvBlockExpSigmoid(nn.Module):
                 print('sigmoid: ' + str(torch.sigmoid(self.H(y1))))
 
         return torch.cat((y1, y2), 1)
+
+    def jacobian(self, x, rev=False):
+        if not rev:
+            jac = torch.sum(self.s)
+        else:
+            jac = -torch.sum(self.s)
+
+        return jac / x.shape[0]
 
 
 class HaarDownsampling(nn.Module):
@@ -193,16 +215,25 @@ class HaarDownsampling(nn.Module):
 
     def forward(self, x, rev=False):
         if not rev:
+            self.elements = x.shape[1] * x.shape[2] * x.shape[3]
+            self.last_jac = self.elements / 4 * np.log(1/16.)
+
             out = F.conv2d(x, self.haar_weights, bias=None, stride=2, groups=self.channel_in) / 4.0
             out = out.reshape([x.shape[0], self.channel_in, 4, x.shape[2] // 2, x.shape[3] // 2])
             out = torch.transpose(out, 1, 2)
             out = out.reshape([x.shape[0], self.channel_in * 4, x.shape[2] // 2, x.shape[3] // 2])
             return out
         else:
+            self.elements = x.shape[1] * x.shape[2] * x.shape[3]
+            self.last_jac = self.elements / 4 * np.log(16.)
+
             out = x.reshape([x.shape[0], 4, self.channel_in, x.shape[2], x.shape[3]])
             out = torch.transpose(out, 1, 2)
             out = out.reshape([x.shape[0], self.channel_in * 4, x.shape[2], x.shape[3]])
             return F.conv_transpose2d(out, self.haar_weights, bias=None, stride=2, groups = self.channel_in)
+
+    def jacobian(self, x, rev=False):
+        return self.last_jac
 
 
 class ShuffleChannel(nn.Module):
@@ -216,6 +247,9 @@ class ShuffleChannel(nn.Module):
             return torch.cat((x[:, self.channel_split_num:, :, :], x[:, :self.channel_split_num, :, :]), 1)
         else:
             return torch.cat((x[:, self.channel_num - self.channel_split_num:, :, :], x[:, :self.channel_num - self.channel_split_num, :, :]), 1)
+
+    def jacobian(self, x, rev=False):
+        return 0
 
 
 class InvSRNet(nn.Module):
@@ -252,13 +286,16 @@ class InvSRNet(nn.Module):
         #if self.upscale == 4:
         #    mutil.initialize_weights(self.upconv2, 0.1)
 
-    def forward(self, x, rev=False):
+    def forward(self, x, rev=False, cal_jacobian=False):
         out = x
+        jacobian = 0
 
         if not rev:
             i = 0
             for op in self.operations:
                 out = op.forward(out, rev)
+                if cal_jacobian:
+                    jacobian += op.jacobian(out, rev)
                 i += 1
                 print('forward sum ' + str(torch.sum(out)))
                 if math.isinf(torch.sum(out)):
@@ -271,6 +308,8 @@ class InvSRNet(nn.Module):
             i = 0
             for op in reversed(self.operations):
                 out = op.forward(out, rev)
+                if cal_jacobian:
+                    jacobian += op.jacobian(out, rev)
                 i += 1
                 print('backward sum ' + str(torch.sum(out)))
                 if math.isinf(torch.sum(out)):
@@ -280,7 +319,10 @@ class InvSRNet(nn.Module):
                     print('Get NaN in backward block ' + str(i))
                     exit()
 
-        return out
+        if cal_jacobian:
+            return out, jacobian
+        else:
+            return out
 
 
 class InvExpSRNet(nn.Module):
@@ -317,13 +359,16 @@ class InvExpSRNet(nn.Module):
         #if self.upscale == 4:
         #    mutil.initialize_weights(self.upconv2, 0.1)
 
-    def forward(self, x, rev=False):
+    def forward(self, x, rev=False, cal_jacobian=False):
         out = x
+        jacobian = 0
 
         if not rev:
             i = 0
             for op in self.operations:
                 out = op.forward(out, rev)
+                if cal_jacobian:
+                    jacobian += op.jacobian(out, rev)
                 i += 1
                 #print('forward sum ' + str(torch.sum(out)))
                 if math.isinf(torch.sum(out)):
@@ -336,6 +381,8 @@ class InvExpSRNet(nn.Module):
             i = 0
             for op in reversed(self.operations):
                 out = op.forward(out, rev)
+                if cal_jacobian:
+                    jacobian += op.jacobian(out, rev)
                 i += 1
                 #print('backward sum ' + str(torch.sum(out)))
                 if math.isinf(torch.sum(out)):
@@ -345,7 +392,10 @@ class InvExpSRNet(nn.Module):
                     print('Get NaN in backward block ' + str(i))
                     exit()
 
-        return out
+        if cal_jacobian:
+            return out, jacobian
+        else:
+            return out
 
 
 class InvSigmoidSRNet(nn.Module):
@@ -382,13 +432,16 @@ class InvSigmoidSRNet(nn.Module):
         #if self.upscale == 4:
         #    mutil.initialize_weights(self.upconv2, 0.1)
 
-    def forward(self, x, rev=False):
+    def forward(self, x, rev=False, cal_jacobian=False):
         out = x
+        jacobian = 0
 
         if not rev:
             i = 0
             for op in self.operations:
                 out = op.forward(out, rev)
+                if cal_jacobian:
+                    jacobian += op.jacobian(out, rev)
                 i += 1
                 print('forward sum ' + str(torch.sum(out)))
                 if math.isinf(torch.sum(out)):
@@ -401,6 +454,8 @@ class InvSigmoidSRNet(nn.Module):
             i = 0
             for op in reversed(self.operations):
                 out = op.forward(out, rev)
+                if cal_jacobian:
+                    jacobian += op.jacobian(out, rev)
                 i += 1
                 print('backward sum ' + str(torch.sum(out)))
                 if math.isinf(torch.sum(out)):
@@ -410,7 +465,10 @@ class InvSigmoidSRNet(nn.Module):
                     print('Get NaN in backward block ' + str(i))
                     exit()
 
-        return out
+        if cal_jacobian:
+            return out, jacobian
+        else:
+            return out
 
 
 class InvExpSigmoidSRNet(nn.Module):
@@ -447,13 +505,16 @@ class InvExpSigmoidSRNet(nn.Module):
         #if self.upscale == 4:
         #    mutil.initialize_weights(self.upconv2, 0.1)
 
-    def forward(self, x, rev=False):
+    def forward(self, x, rev=False, cal_jacobian=False):
         out = x
+        jacobian = 0
 
         if not rev:
             i = 0
             for op in self.operations:
                 out = op.forward(out, rev)
+                if cal_jacobian:
+                    jacobian += op.jacobian(out, rev)
                 i += 1
                 #print('forward sum ' + str(torch.sum(out)))
                 if math.isinf(torch.sum(out)):
@@ -466,6 +527,8 @@ class InvExpSigmoidSRNet(nn.Module):
             i = 0
             for op in reversed(self.operations):
                 out = op.forward(out, rev)
+                if cal_jacobian:
+                    jacobian += op.jacobian(out, rev)
                 i += 1
                 #print('backward sum ' + str(torch.sum(out)))
                 if math.isinf(torch.sum(out)):
@@ -475,4 +538,7 @@ class InvExpSigmoidSRNet(nn.Module):
                     print('Get NaN in backward block ' + str(i))
                     exit()
 
-        return out
+        if cal_jacobian:
+            return out, jacobian
+        else:
+            return out

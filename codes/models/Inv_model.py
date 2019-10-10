@@ -144,7 +144,14 @@ class InvSRModel(BaseModel):
             self.input = torch.cat((self.real_H, self.noise_batch(padding_xshape)), dim=1)
         else:
             self.input = self.real_H
-        self.output = self.netG(self.input)
+
+        if self.train_opt['use_jacobian']:
+            self.output, jacobian = self.netG(self.input, rev=False, cal_jacobian=True)
+            loss = -jacobian
+        else:
+            self.output = self.netG(self.input)
+            loss = 0
+            
         zshape = self.output[:, 3:, :, :].shape
         y = torch.cat((self.var_L, self.noise_batch(zshape)), dim=1)
         #loss = self.loss_forward(self.output, y) + self.loss_backward(self.real_H, y)
@@ -170,7 +177,7 @@ class InvSRModel(BaseModel):
                 l_back_rec = 0
                 l_back_mle = 0
 
-        loss = l_forw_fit + l_back_rec + l_forw_mle + l_back_mle
+        loss += l_forw_fit + l_back_rec + l_forw_mle + l_back_mle
 
         if not self.train_opt['not_use_forw_mmd']:
             loss += l_forw_mmd
