@@ -192,6 +192,59 @@ class InvBlockExpSigmoid(nn.Module):
         return jac / x.shape[0]
 
 
+class InvBlockExpSigmoid2(nn.Module):
+    def __init__(self, subnet_constructor, channel_num, channel_split_num):
+        super(InvBlockExpSigmoid2, self).__init__()
+
+        self.split_len1 = channel_split_num
+        self.split_len2 = channel_num - channel_split_num
+
+        self.F = subnet_constructor(self.split_len2, self.split_len1)
+        self.G = subnet_constructor(self.split_len1, self.split_len2)
+        self.H = subnet_constructor(self.split_len1, self.split_len2)
+        self.I = subnet_constructor(self.split_len2, self.split_len1)
+        #print(self)
+
+    def forward(self, x, rev=False):
+        if math.isinf(torch.sum(x)):
+            print('Get INF in the block input')
+        if math.isnan(torch.sum(x)):
+            print('Get NaN in the block input')
+
+        x1, x2 = (x.narrow(1, 0, self.split_len1), x.narrow(1, self.split_len1, self.split_len2))
+
+        if not rev:
+            self.s1 = torch.sigmoid(self.I(x2)) * 2 - 1
+            y1 = x1.mul(torch.exp(self.s1)) + self.F(x2)
+            self.s2 = torch.sigmoid(self.H(y1)) * 2 - 1
+            y2 = x2.mul(torch.exp(self.s2)) + self.G(y1)
+        else:
+            self.s2 = torch.sigmoid(self.H(x1)) * 2 - 1
+            y2 = (x2 - self.G(x1)).div(torch.exp(self.s2))
+            self.s1 = torch.sigmoid(self.I(y2)) * 2 - 1
+            y1 = (x1 - self.F(y2)).div(torch.exp(self.s1))
+
+        y = torch.cat((y1, y2), 1)
+        if math.isinf(torch.sum(y)):
+            print('Get INF in the block output')
+        if math.isnan(torch.sum(y)):
+            print('Get NaN in the block output')
+            if rev:
+                print('sigmoid: ' + str(torch.sigmoid(self.H(x1))))
+            else:
+                print('sigmoid: ' + str(torch.sigmoid(self.H(y1))))
+
+        return torch.cat((y1, y2), 1)
+
+    def jacobian(self, x, rev=False):
+        if not rev:
+            jac = torch.sum(self.s1) + torch.sum(self.s2)
+        else:
+            jac = -torch.sum(self.s1) - torch.sum(self.s2)
+
+        return jac / x.shape[0]
+
+
 class HaarDownsampling(nn.Module):
     def __init__(self, channel_in):
         super(HaarDownsampling, self).__init__()
@@ -496,6 +549,79 @@ class InvExpSigmoidSRNet(nn.Module):
             current_channel *= 4
             for j in range(block_num[i + 1]):
                 b = InvBlockExpSigmoid(subnet_constructor, current_channel, channel_out)
+                operations.append(b)
+
+        self.operations = nn.ModuleList(operations)
+
+        ## initialization
+        #mutil.initialize_weights([self.conv_first, self.upconv1, self.HRconv, self.conv_last], 0.1)
+        #if self.upscale == 4:
+        #    mutil.initialize_weights(self.upconv2, 0.1)
+
+    def forward(self, x, rev=False, cal_jacobian=False):
+        out = x
+        jacobian = 0
+
+        if not rev:
+            i = 0
+            for op in self.operations:
+                out = op.forward(out, rev)
+                if cal_jacobian:
+                    jacobian += op.jacobian(out, rev)
+                i += 1
+                #print('forward sum ' + str(torch.sum(out)))
+                if math.isinf(torch.sum(out)):
+                    print('Get INF in forward block ' + str(i))
+                    exit()
+                if math.isnan(torch.sum(out)):
+                    print('Get NaN in forward block ' + str(i))
+                    exit()
+        else:
+            i = 0
+            for op in reversed(self.operations):
+                out = op.forward(out, rev)
+                if cal_jacobian:
+                    jacobian += op.jacobian(out, rev)
+                i += 1
+                #print('backward sum ' + str(torch.sum(out)))
+                if math.isinf(torch.sum(out)):
+                    print('Get INF in backward block ' + str(i))
+                    exit()
+                if math.isnan(torch.sum(out)):
+                    print('Get NaN in backward block ' + str(i))
+                    exit()
+
+        if cal_jacobian:
+            return out, jacobian
+        else:
+            return out
+
+
+class InvExpSigmoid2SRNet(nn.Module):
+    def __init__(self, channel_in=3, channel_out=3, subnet_constructor=None, block_num=[], upscale_log=2, shuffle_stage1=True):
+        super(InvExpSigmoid2SRNet, self).__init__()
+        self.upscale_log = upscale_log
+
+        operations = []
+
+        channel_split_num1 = channel_in // 2
+        for i in range(block_num[0]):
+            b = InvBlockExpSigmoid2(subnet_constructor, channel_in, channel_split_num1)
+            operations.append(b)
+            if shuffle_stage1:
+                if i != block_num[0] - 1 or block_num[0] % 2 == 0:
+                    if i % 2 == 0:
+                        operations.append(ShuffleChannel(channel_in, channel_split_num1))
+                    else:
+                        operations.append(ShuffleChannel(channel_in, channel_in - channel_split_num1))
+
+        current_channel = channel_in
+        for i in range(upscale_log):
+            b = HaarDownsampling(current_channel)
+            operations.append(b)
+            current_channel *= 4
+            for j in range(block_num[i + 1]):
+                b = InvBlockExpSigmoid2(subnet_constructor, current_channel, channel_out)
                 operations.append(b)
 
         self.operations = nn.ModuleList(operations)

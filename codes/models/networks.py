@@ -4,7 +4,7 @@ import models.modules.SRResNet_arch as SRResNet_arch
 import models.modules.discriminator_vgg_arch as SRGAN_arch
 import models.modules.RRDBNet_arch as RRDBNet_arch
 from models.modules.InvSimpleNet_arch import *
-from models.modules.Inv_arch import InvSRNet, InvExpSRNet
+from models.modules.Inv_arch import *
 from models.modules.Subnet_constructor import subnet
 import math
 logger = logging.getLogger('base')
@@ -46,6 +46,9 @@ def define_G(opt):
     elif which_model == 'InvExpSigmoidSimpleNet':
         upscale_log = int(math.log(opt_net['scale'], 2))
         netG = InvExpSigmoidSRNet(opt_net['in_nc'], opt_net['out_nc'], subnet('SimpleNet', init), opt_net['block_num'], upscale_log)
+    elif which_model == 'InvExpSigmoid2SimpleNet':
+        upscale_log = int(math.log(opt_net['scale'], 2))
+        netG = InvExpSigmoid2SRNet(opt_net['in_nc'], opt_net['out_nc'], subnet('SimpleNet', init), opt_net['block_num'], upscale_log)
     else:
         raise NotImplementedError('Generator model [{:s}] not recognized'.format(which_model))
     return netG
