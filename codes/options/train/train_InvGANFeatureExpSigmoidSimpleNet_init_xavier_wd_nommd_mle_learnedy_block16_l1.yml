@@ -6,7 +6,7 @@
 
 #### general settings
 
-name: 01_InvGANExpSigmoidSimpleNetInitXavier_wd_nommd_mle_learnedy_block16_lr1e-3_l2_x4_scratch_DIV2K
+name: 000_InvGANFeatureExpSigmoidSimpleNetInitXavier_wd_nommd_mle_learnedy_block16_l1_x4_scratch_DIV2K
 
 use_tb_logger: true
 
@@ -16,7 +16,7 @@ distortion: sr
 
 scale: 4
 
-gpu_ids: [0]
+gpu_ids: [1]
 
 
 
@@ -118,7 +118,7 @@ network_D:
 
 path:
 
-  pretrain_model_G: ~ 
+  pretrain_model_G: /home/mingqing/InvSR/experiments/pretrained_models/latest_G.pth
 
   strict_load: true
 
@@ -130,13 +130,13 @@ path:
 
 train:
 
-  lr_G: !!float 1e-3
+  lr_G: !!float 1e-4
 
   beta1: 0.9
 
   beta2: 0.999
 
-  niter: 1600000
+  niter: 400000
 
   warmup_iter: -1  # no warm up
 
@@ -146,15 +146,19 @@ train:
 
 
 
-  lr_steps: [200000, 400000, 600000, 800000, 1000000, 1200000, 1400000]
+  lr_steps: [50000, 100000, 200000, 300000]
 
   lr_gamma: 0.5
 
 
 
-  pixel_criterion: l2
+  pixel_criterion: l1
 
-  pixel_weight: 1.
+  pixel_weight: !!float 1e-2
+
+  feature_criterion: l1
+
+  feature_weight: 1
 
 
 
@@ -167,15 +171,15 @@ train:
 
   mmd_back_kernels: [(0.2, 0.1), (0.2, 0.5), (0.2, 2)]
 
-  lambda_fit_forw: 16
+  lambda_fit_forw: 0.16
 
   lambda_mmd_forw: 1000.
 
   lambda_mmd_back: 1000
 
-  lambda_rec_back: 1
+  lambda_rec_back: 0.01
 
-  lambda_mle_forw: 1
+  lambda_mle_forw: 0.01
 
   gradient_clipping: 10
 
@@ -198,7 +202,7 @@ train:
 
   gan_type: ragan
 
-  gan_weight: 50
+  gan_weight: !!float 5e-3
 
   D_update_ratio: 1
   D_init_iters: 0

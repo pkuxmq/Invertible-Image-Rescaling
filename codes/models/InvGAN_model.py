@@ -64,6 +64,22 @@ class InvGANSRModel(BaseModel):
             else:
                 self.Reconstruction = ReconstructionLoss()
 
+            if self.train_opt['feature_criterion']:
+                self.Reconstructionf = ReconstructionLoss(losstype=self.train_opt['feature_criterion'])
+            else:
+                self.Reconstructionf = ReconstructionLoss()
+
+            # feature loss
+            if train_opt['feature_weight'] > 0:
+                self.l_fea_w = train_opt['feature_weight']
+                self.netF = networks.define_F(opt, use_bn=False).to(self.device)
+                if opt['dist']:
+                    self.netF = DistributedDataParallel(self.netF, device_ids=[torch.cuda.current_device()])
+                else:
+                    self.netF = DataParallel(self.netF)
+            else:
+                self.l_fea_w = 0
+
             # GD gan loss
             self.cri_gan = GANLoss(train_opt['gan_type'], 1.0, 0.0).to(self.device)
             self.l_gan_w = train_opt['gan_weight']
@@ -139,8 +155,7 @@ class InvGANSRModel(BaseModel):
 
         return l_forw_fit, l_forw_mmd, l_forw_mle
 
-    def loss_backward(self, x, y):
-        x_samples = self.netG(y, rev=True)
+    def loss_backward(self, x, x_samples):
         x_samples_image = x_samples[:, :3, :, :]
         MMD = self.MMD_backward(x, x_samples_image)
         l_back_mmd = self.train_opt['lambda_mmd_back'] * torch.mean(MMD)
@@ -156,6 +171,12 @@ class InvGANSRModel(BaseModel):
         return l_back_mmd, l_back_rec, l_back_mle
 
     #def loss_backward_rec(self, out_y, y, x):
+    def feature_loss(self, real, fake):
+        real_fea = self.netF(real).detach()
+        fake_fea = self.netF(fake)
+        l_g_fea = self.l_fea_w * self.Reconstructionf(real_fea, fake_fea)
+        
+        return l_g_fea
         
 
     def optimize_parameters(self, step):
@@ -195,9 +216,10 @@ class InvGANSRModel(BaseModel):
             if (self.train_opt['lambda_rec_back'] == 0.0 and self.train_opt['not_use_back_mmd']):
                 l_back_mmd, l_back_rec, l_back_mle = 0, 0
             else:
-                l_back_mmd, l_back_rec, l_back_mle = self.loss_backward(self.real_H, yy)
+                l_back_mmd, l_back_rec, l_back_mle = self.loss_backward(self.real_H, self.fake_H)
                 if self.train_opt['learned_y_par']:
-                    _, l_back_rec_bicubic, l_back_mle_bicubic = self.loss_backward(self.real_H, y)
+                    self.fake_H_gtlr = self.netG(y, rev=True)
+                    _, l_back_rec_bicubic, l_back_mle_bicubic = self.loss_backward(self.real_H, self.fake_H_gtlr)
                     l_back_rec = self.train_opt['learned_y_par'] * l_back_rec + (1 - self.train_opt['learned_y_par']) * l_back_rec_bicubic
                     l_back_mle = self.train_opt['learned_y_par'] * l_back_mle + (1 - self.train_opt['learned_y_par']) * l_back_mle_bicubic
 
@@ -214,6 +236,12 @@ class InvGANSRModel(BaseModel):
             if not self.train_opt['not_use_back_mmd']:
                 loss += l_back_mmd
 
+            # feature loss
+            if self.l_fea_w > 0:
+                l_fea = self.feature_loss(self.real_H, self.fake_H)
+                loss += l_fea
+
+            # GAN loss
             pred_g_fake = self.netD(self.fake_H)
             if self.opt['train']['gan_type'] == 'gan':
                 l_g_gan = self.l_gan_w * self.cri_gan(pred_g_fake, True)
@@ -221,6 +249,9 @@ class InvGANSRModel(BaseModel):
                 pred_d_real = self.netD(self.var_ref).detach()
                 l_g_gan = self.l_gan_w * (self.cri_gan(pred_d_real - torch.mean(pred_g_fake), False) + self.cri_gan(pred_g_fake - torch.mean(pred_d_real), True)) / 2
             loss += l_g_gan
+
+            #print(str(l_forw_fit.item()) + "  ||  " + str(l_back_rec.item()) + "  ||  " + str(l_forw_mle.item()) + "  ||  " + str(l_back_mle.item()) + "  ||  " + str(l_g_gan.item()))
+            print(str(l_forw_fit) + "  ||  " + str(l_back_rec) + "  ||  " + str(l_forw_mle) + "  ||  " + str(l_back_mle) + "  ||  " + str(l_g_gan))
 
             #print(loss.item())
 
