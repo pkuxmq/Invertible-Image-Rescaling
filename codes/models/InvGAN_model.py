@@ -64,12 +64,18 @@ class InvGANSRModel(BaseModel):
             else:
                 self.Reconstruction = ReconstructionLoss()
 
-            if self.train_opt['feature_criterion']:
-                self.Reconstructionf = ReconstructionLoss(losstype=self.train_opt['feature_criterion'])
-            else:
-                self.Reconstructionf = ReconstructionLoss()
-
             # feature loss
+            if self.train_opt['feature_criterion']:
+                if self.train_opt['normalize_feature']:
+                    self.Reconstructionf = FeatureNormalizeLoss(losstype=self.train_opt['feature_criterion'])
+                else:
+                    self.Reconstructionf = ReconstructionLoss(losstype=self.train_opt['feature_criterion'])
+            else:
+                if self.train_opt['normalize_feature']:
+                    self.Reconstructionf = FeatureNormalizeLoss()
+                else:
+                    self.Reconstructionf = ReconstructionLoss()
+
             if train_opt['feature_weight'] > 0:
                 self.l_fea_w = train_opt['feature_weight']
                 self.netF = networks.define_F(opt, use_bn=False).to(self.device)
