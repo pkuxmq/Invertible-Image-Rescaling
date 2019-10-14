@@ -49,6 +49,9 @@ def define_G(opt):
     elif which_model == 'InvExpSigmoid2SimpleNet':
         upscale_log = int(math.log(opt_net['scale'], 2))
         netG = InvExpSigmoid2SRNet(opt_net['in_nc'], opt_net['out_nc'], subnet('SimpleNet', init), opt_net['block_num'], upscale_log)
+    elif which_model == 'InvExpSigmoidRRDBNet':
+        upscale_log = int(math.log(opt_net['scale'], 2))
+        netG = InvExpSigmoidSRNet(opt_net['in_nc'], opt_net['out_nc'], subnet('RRDBNet', init), opt_net['block_num'], upscale_log)
     else:
         raise NotImplementedError('Generator model [{:s}] not recognized'.format(which_model))
     return netG
