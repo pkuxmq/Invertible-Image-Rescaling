@@ -6,7 +6,7 @@
 
 #### general settings
 
-name: 000_InvbiGANFeatureExpSigmoidRRDBNetInitXavier_wd_nommd_mle_learnedy_block16_l2_x4_scratch_DIV2K
+name: 000_InvbiGANFeatureExpSigmoidRRDBNetInitXavier_wd_nommd_mle_learnedy_block16_l2_gan_x4_scratch_DIV2K
 
 use_tb_logger: true
 
@@ -16,7 +16,7 @@ distortion: sr
 
 scale: 4
 
-gpu_ids: [0]
+gpu_ids: [1]
 
 
 
@@ -193,7 +193,7 @@ train:
 
   beta2_D: 0.99
 
-  gan_type: ragan
+  gan_type: gan
 
   gan_weight: !!float 5e-3
 
@@ -209,7 +209,7 @@ train:
 
   beta2_D_forw: 0.99
 
-  gan_type_forw: ragan
+  gan_type_forw: gan
 
   gan_weight_forw: !!float 5e-3
 

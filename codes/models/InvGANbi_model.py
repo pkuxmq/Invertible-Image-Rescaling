@@ -258,7 +258,7 @@ class InvGANbiSRModel(BaseModel):
                     l_back_gan = self.train_opt['learned_y_par'] * l_back_gan + (1 - self.train_opt['learned_y_par']) * l_back_gan_bicubic
 
 
-            loss += l_forw_fit + l_forw_gan + l_back_rec + l_forw_mle + l_back_mle + l_back_fea + l_back_gan
+            loss += l_forw_fit + l_forw_gan + l_back_rec + l_back_mle + l_back_fea + l_back_gan
 
             #print(str(l_forw_fit.item()) + "  ||  " + str(l_back_rec.item()) + "  ||  " + str(l_forw_mle.item()) + "  ||  " + str(l_back_mle.item()) + "  ||  " + str(l_g_gan.item()))
             print(str(l_forw_fit) + "  ||  " + str(l_back_rec) + "  ||  " + str(l_forw_gan) + "  ||  " + str(l_back_mle) + "  ||  " + str(l_back_gan) + " || " + str(l_back_fea))
@@ -277,7 +277,12 @@ class InvGANbiSRModel(BaseModel):
         for p in self.netD.parameters():
             p.requires_grad = True
 
+        for p in self.netD_forw.parameters():
+            p.requires_grad = True
+
         self.optimizer_D.zero_grad()
+        self.optimizer_D_forw.zero_grad()
+
         l_d_total = 0
         pred_d_real = self.netD(self.var_ref)
         pred_d_fake = self.netD(self.fake_H.detach())
@@ -290,17 +295,9 @@ class InvGANbiSRModel(BaseModel):
             l_d_fake = self.cri_gan(pred_d_fake - torch.mean(pred_d_real), False)
             l_d_total = (l_d_real + l_d_fake) / 2
 
-        l_d_total.backward()
-        self.optimizer_D.step()
-
-        # D_forw
-        for p in self.netD_forw.parameters():
-            p.requires_grad = True
-
-        self.optimizer_D_forw.zero_grad()
         l_d_forw_total = 0
         pred_d_forw_real = self.netD_forw(y)
-        pred_d_forw_fake = self.netD_forw(self.output)
+        pred_d_forw_fake = self.netD_forw(self.output.detach())
         if self.opt['train']['gan_type'] == 'gan':
             l_d_forw_real = self.cri_gan_forw(pred_d_forw_real, True)
             l_d_forw_fake = self.cri_gan_forw(pred_d_forw_fake, False)
@@ -310,7 +307,11 @@ class InvGANbiSRModel(BaseModel):
             l_d_forw_fake = self.cri_gan_forw(pred_d_forw_fake - torch.mean(pred_d_forw_real), False)
             l_d_forw_total = (l_d_forw_real + l_d_forw_fake) / 2
 
-        l_d_forw_total.backward()
+        l_d = l_d_total + l_d_forw_total
+        l_d.backward()
+
+
+        self.optimizer_D.step()
         self.optimizer_D_forw.step()
 
         ## set log
