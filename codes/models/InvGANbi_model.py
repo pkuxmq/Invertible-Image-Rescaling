@@ -66,10 +66,14 @@ class InvGANbiSRModel(BaseModel):
             #self.MMD_forward = MMDLoss(config_mmd_forw) 
             #self.MMD_backward = MMDLoss(config_mmd_back) 
 
-            if self.train_opt['pixel_criterion']:
-                self.Reconstruction = ReconstructionLoss(losstype=self.train_opt['pixel_criterion'])
+            #if self.train_opt['pixel_criterion']:
+            #    self.Reconstruction = ReconstructionLoss(losstype=self.train_opt['pixel_criterion'])
+            #else:
+            #    self.Reconstruction = ReconstructionLoss()
+            if self.train_opt['pixel_critetion'] == 'l2':
+                self.Reconstruction = nn.MSELoss().to(self.device)
             else:
-                self.Reconstruction = ReconstructionLoss()
+                self.Reconstruction = nn.L1Loss().to(self.device)
 
             # feature loss
             if self.train_opt['feature_criterion']:
