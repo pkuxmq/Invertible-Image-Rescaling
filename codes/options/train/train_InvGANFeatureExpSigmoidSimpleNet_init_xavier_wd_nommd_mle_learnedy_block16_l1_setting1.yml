@@ -6,7 +6,7 @@
 
 #### general settings
 
-name: 0_InvGANNoFeatureExpSigmoidSimpleNetInitXavier_wd_nommd_mle_learnedy_block16_l1_x4_scratch_DIV2K
+name: 01setting_InvGANFeatureExpSigmoidSimpleNetInitXavier_wd_nommd_mle_learnedy_block16_l1_x4_scratch_DIV2K
 
 use_tb_logger: true
 
@@ -16,7 +16,7 @@ distortion: sr
 
 scale: 4
 
-gpu_ids: [2]
+gpu_ids: [0]
 
 
 
@@ -158,7 +158,7 @@ train:
 
   feature_criterion: l1
 
-  feature_weight: 0
+  feature_weight: 1
 
 
 
@@ -171,7 +171,7 @@ train:
 
   mmd_back_kernels: [(0.2, 0.1), (0.2, 0.5), (0.2, 2)]
 
-  lambda_fit_forw: 16
+  lambda_fit_forw: 0.16
 
   lambda_mmd_forw: 1000.
 
@@ -179,7 +179,7 @@ train:
 
   lambda_rec_back: 0.01
 
-  lambda_mle_forw: 1
+  lambda_mle_forw: 0.01
 
   gradient_clipping: 10
 
@@ -202,7 +202,7 @@ train:
 
   gan_type: ragan
 
-  gan_weight: !!float 1e-1
+  gan_weight: !!float 5e-1
 
   D_update_ratio: 1
   D_init_iters: 0

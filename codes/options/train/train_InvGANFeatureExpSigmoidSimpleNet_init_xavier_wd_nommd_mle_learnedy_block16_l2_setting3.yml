@@ -6,7 +6,7 @@
 
 #### general settings
 
-name: 0_InvGANNoFeatureExpSigmoidSimpleNetInitXavier_wd_nommd_mle_learnedy_block16_l1_x4_scratch_DIV2K
+name: 03setting_InvGANFeatureExpSigmoidSimpleNetInitXavier_wd_nommd_mle_learnedy_block16_l2_x4_scratch_DIV2K
 
 use_tb_logger: true
 
@@ -152,13 +152,13 @@ train:
 
 
 
-  pixel_criterion: l1
+  pixel_criterion: l2
 
   pixel_weight: !!float 1e-2
 
-  feature_criterion: l1
+  feature_criterion: l2
 
-  feature_weight: 0
+  feature_weight: 1
 
 
 
@@ -202,7 +202,7 @@ train:
 
   gan_type: ragan
 
-  gan_weight: !!float 1e-1
+  gan_weight: !!float 5e-1
 
   D_update_ratio: 1
   D_init_iters: 0
