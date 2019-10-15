@@ -144,6 +144,9 @@ def main():
         current_step = 0
         start_epoch = 0
 
+    #for val_data in val_loader:
+    #    model.feed_data(val_data)
+    #    model.test()
     #### training
     logger.info('Start training from epoch: {:d}, iter: {:d}'.format(start_epoch, current_step))
     for epoch in range(start_epoch, total_epochs + 1):

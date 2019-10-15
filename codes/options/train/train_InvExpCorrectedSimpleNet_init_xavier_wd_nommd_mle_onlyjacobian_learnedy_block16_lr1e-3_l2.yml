@@ -6,7 +6,7 @@
 
 #### general settings
 
-name: 021_InvExpSigmoidRRDBNetInitXavier_wd_nommd_mle_learnedy_block16_lr1e-3_l2_x4_scratch_DIV2K
+name: 021_InvExpCorrectedSimpleNetInitXavier_wd_nommd_mle_onlyjacobian_learnedy_block16_lr1e-3_l2_x4_scratch_DIV2K
 
 use_tb_logger: true
 
@@ -16,7 +16,7 @@ distortion: sr
 
 scale: 4
 
-gpu_ids: [1]
+gpu_ids: [2]
 
 
 
@@ -92,7 +92,7 @@ datasets:
 
 network_G:
 
-  which_model_G: InvExpSigmoidRRDBNet
+  which_model_G: InvExpSimpleNet
 
   in_nc: 3
 
@@ -178,6 +178,10 @@ train:
   weight_decay_G: !!float 1e-5
 
   use_learned_y: True
+
+  use_jacobian: True
+
+  no_back_rec: True
 
 
 #### logger

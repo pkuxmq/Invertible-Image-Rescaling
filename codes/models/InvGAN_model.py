@@ -257,7 +257,7 @@ class InvGANSRModel(BaseModel):
             loss += l_g_gan
 
             #print(str(l_forw_fit.item()) + "  ||  " + str(l_back_rec.item()) + "  ||  " + str(l_forw_mle.item()) + "  ||  " + str(l_back_mle.item()) + "  ||  " + str(l_g_gan.item()))
-            print(str(l_forw_fit) + "  ||  " + str(l_back_rec) + "  ||  " + str(l_forw_mle) + "  ||  " + str(l_back_mle) + "  ||  " + str(l_g_gan))
+            print(str(l_forw_fit) + "  ||  " + str(l_back_rec) + "  ||  " + str(l_forw_mle) + "  ||  " + str(l_back_mle) + "  ||  " + str(l_g_gan) + " || " + str(l_fea))
 
             #print(loss.item())
 
