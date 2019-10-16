@@ -258,21 +258,19 @@ class InvGANforwSRModel(BaseModel):
 
         self.optimizer_D_forw.zero_grad()
 
-        l_d_total = 0
-
         l_d_forw_total = 0
         pred_d_forw_real = self.netD_forw(y)
         pred_d_forw_fake = self.netD_forw(self.output.detach())
-        if self.opt['train']['gan_type'] == 'gan':
+        if self.opt['train']['gan_type_forw'] == 'gan':
             l_d_forw_real = self.cri_gan_forw(pred_d_forw_real, True)
             l_d_forw_fake = self.cri_gan_forw(pred_d_forw_fake, False)
             l_d_forw_total = l_d_forw_real + l_d_forw_fake
-        elif self.opt['train']['gan_type'] == 'ragan':
+        elif self.opt['train']['gan_type_forw'] == 'ragan':
             l_d_forw_real = self.cri_gan_forw(pred_d_forw_real - torch.mean(pred_d_forw_fake), True)
             l_d_forw_fake = self.cri_gan_forw(pred_d_forw_fake - torch.mean(pred_d_forw_real), False)
             l_d_forw_total = (l_d_forw_real + l_d_forw_fake) / 2
 
-        l_d = l_d_total + l_d_forw_total
+        l_d = l_d_forw_total
         l_d.backward()
 
 
