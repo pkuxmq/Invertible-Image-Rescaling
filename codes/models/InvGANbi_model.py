@@ -76,16 +76,20 @@ class InvGANbiSRModel(BaseModel):
                 self.Reconstruction = nn.L1Loss().to(self.device)
 
             # feature loss
-            if self.train_opt['feature_criterion']:
-                if self.train_opt['normalize_feature']:
-                    self.Reconstructionf = FeatureNormalizeLoss(losstype=self.train_opt['feature_criterion'])
-                else:
-                    self.Reconstructionf = ReconstructionLoss(losstype=self.train_opt['feature_criterion'])
+            #if self.train_opt['feature_criterion']:
+            #    if self.train_opt['normalize_feature']:
+            #        self.Reconstructionf = FeatureNormalizeLoss(losstype=self.train_opt['feature_criterion'])
+            #    else:
+            #        self.Reconstructionf = ReconstructionLoss(losstype=self.train_opt['feature_criterion'])
+            #else:
+            #    if self.train_opt['normalize_feature']:
+            #        self.Reconstructionf = FeatureNormalizeLoss()
+            #    else:
+            #        self.Reconstructionf = ReconstructionLoss()
+            if self.train_opt['feature_critetion'] == 'l2':
+                self.Reconstructionf = nn.MSELoss().to(self.device)
             else:
-                if self.train_opt['normalize_feature']:
-                    self.Reconstructionf = FeatureNormalizeLoss()
-                else:
-                    self.Reconstructionf = ReconstructionLoss()
+                self.Reconstructionf = nn.L1Loss().to(self.device)
 
             if train_opt['feature_weight'] > 0:
                 self.l_fea_w = train_opt['feature_weight']
