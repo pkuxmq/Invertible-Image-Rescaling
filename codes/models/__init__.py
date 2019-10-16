@@ -11,6 +11,8 @@ def create_model(opt):
         from .InvGAN_model import InvGANSRModel as M
     elif model == 'invganbi-sr':
         from .InvGANbi_model import InvGANbiSRModel as M
+    elif model == 'invganforw-sr':
+        from .InvGANforw_model import InvGANforwSRModel as M
     elif model == 'sr':
         from .SR_model import SRModel as M
     elif model == 'srgan':

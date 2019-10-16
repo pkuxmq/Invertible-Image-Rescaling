@@ -16,9 +16,9 @@ class Config_MMD(object):
         self.device = device
         self.mmd_kernels = mmd_kernels
 
-class InvGANbiSRModel(BaseModel):
+class InvGANforwSRModel(BaseModel):
     def __init__(self, opt):
-        super(InvGANbiSRModel, self).__init__(opt)
+        super(InvGANforwSRModel, self).__init__(opt)
 
         if opt['dist']:
             self.rank = torch.distributed.get_rank()
@@ -39,12 +39,6 @@ class InvGANbiSRModel(BaseModel):
         self.load()
 
         if self.is_train:
-            self.netD = networks.define_D(opt).to(self.device)
-            if opt['dist']:
-                self.netD = DistributedDataParallel(self.netD, device_ids=[torch.cuda.current_device()])
-            else:
-                self.netD = DataParallel(self.netD)
-
             self.netD_forw = networks.define_D(opt['forward_discriminator']).to(self.device)
             if opt['dist']:
                 self.netD_forw = DistributedDataParallel(self.netD_forw, device_ids=[torch.cuda.current_device()])
@@ -52,7 +46,6 @@ class InvGANbiSRModel(BaseModel):
                 self.netD_forw = DataParallel(self.netD_forw)
 
             self.netG.train()
-            self.netD.train()
             self.netD_forw.train()
 
             # loss
@@ -91,36 +84,8 @@ class InvGANbiSRModel(BaseModel):
                 else:
                     self.Reconstruction_back = nn.L1Loss().to(self.device)
 
-            # feature loss
-            #if self.train_opt['feature_criterion']:
-            #    if self.train_opt['normalize_feature']:
-            #        self.Reconstructionf = FeatureNormalizeLoss(losstype=self.train_opt['feature_criterion'])
-            #    else:
-            #        self.Reconstructionf = ReconstructionLoss(losstype=self.train_opt['feature_criterion'])
-            #else:
-            #    if self.train_opt['normalize_feature']:
-            #        self.Reconstructionf = FeatureNormalizeLoss()
-            #    else:
-            #        self.Reconstructionf = ReconstructionLoss()
-            if self.train_opt['feature_critetion'] == 'l2':
-                self.Reconstructionf = nn.MSELoss().to(self.device)
-            else:
-                self.Reconstructionf = nn.L1Loss().to(self.device)
-
-            if train_opt['feature_weight'] > 0:
-                self.l_fea_w = train_opt['feature_weight']
-                self.netF = networks.define_F(opt, use_bn=False).to(self.device)
-                if opt['dist']:
-                    self.netF = DistributedDataParallel(self.netF, device_ids=[torch.cuda.current_device()])
-                else:
-                    self.netF = DataParallel(self.netF)
-            else:
-                self.l_fea_w = 0
 
             # GD gan loss
-            self.cri_gan = GANLoss(train_opt['gan_type'], 1.0, 0.0).to(self.device)
-            self.l_gan_w = train_opt['gan_weight']
-
             self.cri_gan_forw = GANLoss(train_opt['gan_type_forw'], 1.0, 0.0).to(self.device)
             self.l_gan_w_forw = train_opt['gan_weight_forw']
             # D_update_ratio and D_init_iters
@@ -143,10 +108,6 @@ class InvGANbiSRModel(BaseModel):
                                                 betas=(train_opt['beta1'], train_opt['beta2']))
             self.optimizers.append(self.optimizer_G)
             # D
-            wd_D = train_opt['weight_decay_D'] if train_opt['weight_decay_D'] else 0
-            self.optimizer_D = torch.optim.Adam(self.netD.parameters(), lr=train_opt['lr_D'], weight_decay=wd_D, betas=(train_opt['beta1_D'], train_opt['beta2_D']))
-            self.optimizers.append(self.optimizer_D)
-
             wd_D_forw = train_opt['weight_decay_D_forw'] if train_opt['weight_decay_D_forw'] else 0
             self.optimizer_D_forw = torch.optim.Adam(self.netD_forw.parameters(), lr=train_opt['lr_D_forw'], weight_decay=wd_D_forw, betas=(train_opt['beta1_D_forw'], train_opt['beta2_D_forw']))
             self.optimizers.append(self.optimizer_D_forw)
@@ -209,16 +170,10 @@ class InvGANbiSRModel(BaseModel):
             l_back_mle = 0
 
         # feature loss
-        if self.l_fea_w > 0:
-            l_back_fea = self.feature_loss(x, x_samples_image)
+        l_back_fea = 0
 
         # GAN loss
-        pred_g_fake = self.netD(x_samples_image)
-        if self.opt['train']['gan_type'] == 'gan':
-            l_back_gan = self.l_gan_w * self.cri_gan(pred_g_fake, True)
-        elif self.opt['train']['gan_type'] == 'ragan':
-            pred_d_real = self.netD(x).detach()
-            l_back_gan = self.l_gan_w * (self.cri_gan(pred_d_real - torch.mean(pred_g_fake), False) + self.cri_gan(pred_g_fake - torch.mean(pred_d_real), True)) / 2
+        l_back_gan = 0
 
         return l_back_rec, l_back_mle, l_back_fea, l_back_gan
 
@@ -232,8 +187,6 @@ class InvGANbiSRModel(BaseModel):
 
     def optimize_parameters(self, step):
         # G
-        for p in self.netD.parameters():
-            p.requires_grad = False
         for p in self.netD_forw.parameters():
             p.requires_grad = False
 
@@ -300,26 +253,12 @@ class InvGANbiSRModel(BaseModel):
             self.optimizer_G.step()
 
         # D
-        for p in self.netD.parameters():
-            p.requires_grad = True
-
         for p in self.netD_forw.parameters():
             p.requires_grad = True
 
-        self.optimizer_D.zero_grad()
         self.optimizer_D_forw.zero_grad()
 
         l_d_total = 0
-        pred_d_real = self.netD(self.var_ref)
-        pred_d_fake = self.netD(self.fake_H.detach())
-        if self.opt['train']['gan_type'] == 'gan':
-            l_d_real = self.cri_gan(pred_d_real, True)
-            l_d_fake = self.cri_gan(pred_d_fake, False)
-            l_d_total = l_d_real + l_d_fake
-        elif self.opt['train']['gan_type'] == 'ragan':
-            l_d_real = self.cri_gan(pred_d_real - torch.mean(pred_d_fake), True)
-            l_d_fake = self.cri_gan(pred_d_fake - torch.mean(pred_d_real), False)
-            l_d_total = (l_d_real + l_d_fake) / 2
 
         l_d_forw_total = 0
         pred_d_forw_real = self.netD_forw(y)
@@ -337,7 +276,6 @@ class InvGANbiSRModel(BaseModel):
         l_d.backward()
 
 
-        self.optimizer_D.step()
         self.optimizer_D_forw.step()
 
         ## set log
