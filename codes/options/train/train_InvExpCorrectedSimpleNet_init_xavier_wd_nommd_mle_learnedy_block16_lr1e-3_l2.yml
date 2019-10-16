@@ -6,7 +6,7 @@
 
 #### general settings
 
-name: 021_InvExpSigmoidSimpleNetInitXavier_wd_nommd_mle_learnedy_block16_lr1e-3_l2_x4_scratch_DIV2K
+name: 021_InvExpSimpleNetInitXavier_wd_nommd_mle_learnedy_block16_lr1e-3_l2_x4_scratch_DIV2K
 
 use_tb_logger: true
 
@@ -16,7 +16,7 @@ distortion: sr
 
 scale: 4
 
-gpu_ids: [1]
+gpu_ids: [2]
 
 
 
@@ -92,7 +92,7 @@ datasets:
 
 network_G:
 
-  which_model_G: InvExpSigmoidSimpleNet
+  which_model_G: InvExpSimpleNet
 
   in_nc: 3
 

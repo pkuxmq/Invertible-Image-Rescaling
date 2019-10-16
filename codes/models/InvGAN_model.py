@@ -59,10 +59,16 @@ class InvGANSRModel(BaseModel):
             self.MMD_forward = MMDLoss(config_mmd_forw) 
             self.MMD_backward = MMDLoss(config_mmd_back) 
 
+            #if self.train_opt['pixel_criterion']:
+            #    self.Reconstruction = ReconstructionLoss(losstype=self.train_opt['pixel_criterion'])
+            #else:
+            #    self.Reconstruction = ReconstructionLoss()
             if self.train_opt['pixel_criterion']:
-                self.Reconstruction = ReconstructionLoss(losstype=self.train_opt['pixel_criterion'])
+                self.Reconstruction_forw = ReconstructionLoss(losstype=self.train_opt['pixel_criterion'])
+                self.Reconstruction_back = ReconstructionLoss(losstype=self.train_opt['pixel_criterion'])
             else:
-                self.Reconstruction = ReconstructionLoss()
+                self.Reconstruction_forw = ReconstructionLoss(losstype=self.train_opt['pixel_criterion_forw'])
+                self.Reconstruction_back = ReconstructionLoss(losstype=self.train_opt['pixel_criterion_back'])
 
             # feature loss
             if self.train_opt['feature_criterion']:
@@ -151,7 +157,7 @@ class InvGANSRModel(BaseModel):
         output_block_grad = torch.cat((out[:, :3, :, :], out[:, 3:, :, :].data), dim=1)
         y_short = torch.cat((y[:, :3, :, :], y[:, 3:, :, :]), dim=1)
 
-        l_forw_fit = self.train_opt['lambda_fit_forw'] * self.Reconstruction(out[:, :3, :, :], y[:, :3, :, :])
+        l_forw_fit = self.train_opt['lambda_fit_forw'] * self.Reconstruction_forw(out[:, :3, :, :], y[:, :3, :, :])
         l_forw_mmd = self.train_opt['lambda_mmd_forw'] * torch.mean(self.MMD_forward(output_block_grad, y_short))
 
         z = out[:, 3:, :, :].reshape([out.shape[0], -1])
@@ -165,7 +171,7 @@ class InvGANSRModel(BaseModel):
         x_samples_image = x_samples[:, :3, :, :]
         MMD = self.MMD_backward(x, x_samples_image)
         l_back_mmd = self.train_opt['lambda_mmd_back'] * torch.mean(MMD)
-        l_back_rec = self.train_opt['lambda_rec_back'] * self.Reconstruction(x, x_samples_image)
+        l_back_rec = self.train_opt['lambda_rec_back'] * self.Reconstruction_back(x, x_samples_image)
         if self.train_opt['padding_x']:
             xx = x_samples[:, 3:, :, :].reshape([x_samples.shape[0], -1])
             l_back_mle = self.train_opt['lambda_mle_back'] * torch.sum(torch.norm(xx, p=2, dim=1))

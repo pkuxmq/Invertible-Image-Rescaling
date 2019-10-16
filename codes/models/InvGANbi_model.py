@@ -70,10 +70,26 @@ class InvGANbiSRModel(BaseModel):
             #    self.Reconstruction = ReconstructionLoss(losstype=self.train_opt['pixel_criterion'])
             #else:
             #    self.Reconstruction = ReconstructionLoss()
-            if self.train_opt['pixel_critetion'] == 'l2':
-                self.Reconstruction = nn.MSELoss().to(self.device)
+            #if self.train_opt['pixel_critetion'] == 'l2':
+            #    self.Reconstruction = nn.MSELoss().to(self.device)
+            #else:
+            #    self.Reconstruction = nn.L1Loss().to(self.device)
+            if self.train_opt['pixel_criterion']:
+                if self.train_opt['pixel_critetion'] == 'l2':
+                    self.Reconstruction_forw = nn.MSELoss().to(self.device)
+                    self.Reconstruction_back = nn.MSELoss().to(self.device)
+                else:
+                    self.Reconstruction_forw = nn.L1Loss().to(self.device)
+                    self.Reconstruction_back = nn.L1Loss().to(self.device)
             else:
-                self.Reconstruction = nn.L1Loss().to(self.device)
+                if self.train_opt['pixel_critetion_forw'] == 'l2':
+                    self.Reconstruction_forw = nn.MSELoss().to(self.device)
+                else:
+                    self.Reconstruction_forw = nn.L1Loss().to(self.device)
+                if self.train_opt['pixel_critetion_back'] == 'l2':
+                    self.Reconstruction_back = nn.MSELoss().to(self.device)
+                else:
+                    self.Reconstruction_back = nn.L1Loss().to(self.device)
 
             # feature loss
             #if self.train_opt['feature_criterion']:
@@ -171,7 +187,7 @@ class InvGANbiSRModel(BaseModel):
 
     def loss_forward(self, out, y):
 
-        l_forw_fit = self.train_opt['lambda_fit_forw'] * self.Reconstruction(out[:, :3, :, :], y[:, :3, :, :])
+        l_forw_fit = self.train_opt['lambda_fit_forw'] * self.Reconstruction_forw(out[:, :3, :, :], y[:, :3, :, :])
 
         # GAN loss
         pred_forw_fake = self.netD_forw(out)
@@ -185,7 +201,7 @@ class InvGANbiSRModel(BaseModel):
 
     def loss_backward(self, x, x_samples):
         x_samples_image = x_samples[:, :3, :, :]
-        l_back_rec = self.train_opt['lambda_rec_back'] * self.Reconstruction(x, x_samples_image)
+        l_back_rec = self.train_opt['lambda_rec_back'] * self.Reconstruction_back(x, x_samples_image)
         if self.train_opt['padding_x']:
             xx = x_samples[:, 3:, :, :].reshape([x_samples.shape[0], -1])
             l_back_mle = self.train_opt['lambda_mle_back'] * torch.sum(torch.norm(xx, p=2, dim=1))

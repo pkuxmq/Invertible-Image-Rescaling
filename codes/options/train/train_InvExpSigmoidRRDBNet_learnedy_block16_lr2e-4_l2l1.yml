@@ -6,7 +6,7 @@
 
 #### general settings
 
-name: 021_InvExpSigmoidSimpleNetInitXavier_wd_nommd_mle_learnedy_block16_lr1e-3_l2_x4_scratch_DIV2K
+name: 021_InvExpSigmoidRRDBNetInitXavier_wd_nommd_mle_learnedy_block16_lr2e-4_l2l1_x4_scratch_DIV2K
 
 use_tb_logger: true
 
@@ -16,7 +16,7 @@ distortion: sr
 
 scale: 4
 
-gpu_ids: [1]
+gpu_ids: [0]
 
 
 
@@ -92,7 +92,7 @@ datasets:
 
 network_G:
 
-  which_model_G: InvExpSigmoidSimpleNet
+  which_model_G: InvExpSigmoidRRDBNet
 
   in_nc: 3
 
@@ -122,13 +122,13 @@ path:
 
 train:
 
-  lr_G: !!float 1e-3
+  lr_G: !!float 2e-4
 
   beta1: 0.9
 
   beta2: 0.999
 
-  niter: 1600000
+  niter: 1000000
 
   warmup_iter: -1  # no warm up
 
@@ -138,13 +138,15 @@ train:
 
 
 
-  lr_steps: [200000, 400000, 600000, 800000, 1000000, 1200000, 1400000]
+  lr_steps: [200000, 400000, 600000, 800000]
 
   lr_gamma: 0.5
 
 
 
-  pixel_criterion: l2
+  pixel_criterion_forw: l2
+
+  pixel_criterion_back: l1
 
   pixel_weight: 1.0
 
