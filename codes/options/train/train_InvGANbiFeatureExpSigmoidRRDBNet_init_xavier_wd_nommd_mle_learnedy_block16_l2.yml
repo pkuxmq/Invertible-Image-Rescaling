@@ -6,7 +6,7 @@
 
 #### general settings
 
-name: 000_InvbiGANFeatureExpSigmoidRRDBNetInitXavier_wd_nommd_mle_learnedy_block16_l2_x4_scratch_DIV2K
+name: 000_InvbiGANFeatureExpSigmoidRRDBNetInitXavier_wd_nommd_mle_learnedy_block16_l2_ragan_x4_scratch_DIV2K
 
 use_tb_logger: true
 
