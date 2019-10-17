@@ -176,7 +176,7 @@ train:
   val_freq: !!float 5e3
 
 
-  lambda_fit_forw: 1
+  lambda_fit_forw: 16
 
   lambda_rec_back: 0.01
 
