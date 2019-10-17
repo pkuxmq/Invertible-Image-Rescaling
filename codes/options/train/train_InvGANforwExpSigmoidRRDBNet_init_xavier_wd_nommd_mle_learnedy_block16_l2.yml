@@ -163,6 +163,8 @@ train:
 
   lambda_fit_forw: 16
 
+  lambda_mle_forw: 1
+
   lambda_rec_back: 1
 
   gradient_clipping: 10
