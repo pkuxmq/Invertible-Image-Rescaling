@@ -197,7 +197,7 @@ class InvGANbiSRModel(BaseModel):
             pred_d_real = self.netD_forw(y).detach()
             l_forw_gan = self.l_gan_w_forw * (self.cri_gan_forw(pred_d_real - torch.mean(pred_forw_fake), False) + self.cri_gan_forw(pred_forw_fake - torch.mean(pred_d_real), True)) / 2
 
-        if train_opt['lambda_mle_forw']:
+        if self.train_opt['lambda_mle_forw']:
             z = out[:, 3:, :, :].reshape([out.shape[0], -1])
             l_forw_mle = self.train_opt['lambda_mle_forw'] * torch.sum(torch.norm(z, p=2, dim=1))
         else:
