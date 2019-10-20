@@ -6,7 +6,7 @@
 
 #### general settings
 
-name: 000_InvbiGANFeatureExpSigmoidRRDBNetInitXavier_wd_nommd_mle_learnedy_block16_l2_pretrain5000_x4_scratch_DIV2K
+name: 000_InvbiGANFeatureExpSigmoidRRDBNetInitXavier_wd_nommd_mle_learnedy_block16_l2_mle_x4_scratch_DIV2K
 
 use_tb_logger: true
 
@@ -16,7 +16,7 @@ distortion: sr
 
 scale: 4
 
-gpu_ids: [0]
+gpu_ids: [3]
 
 
 
@@ -127,7 +127,7 @@ forward_discriminator:
 
 path:
 
-  pretrain_model_G: /home/mingqing/InvSR/experiments/pretrained_models/5000_G.pth
+  pretrain_model_G: /home/mingqing/InvSR/experiments/pretrained_models/85000_G.pth
 
   strict_load: true
 
@@ -176,7 +176,7 @@ train:
 
   lambda_fit_forw: 16
 
-  lambda_mle_forw: 0
+  lambda_mle_forw: 1
 
   lambda_rec_back: 0.01
 

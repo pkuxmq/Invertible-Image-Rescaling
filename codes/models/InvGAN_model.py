@@ -63,24 +63,44 @@ class InvGANSRModel(BaseModel):
             #    self.Reconstruction = ReconstructionLoss(losstype=self.train_opt['pixel_criterion'])
             #else:
             #    self.Reconstruction = ReconstructionLoss()
+            #if self.train_opt['pixel_criterion']:
+            #    self.Reconstruction_forw = ReconstructionLoss(losstype=self.train_opt['pixel_criterion'])
+            #    self.Reconstruction_back = ReconstructionLoss(losstype=self.train_opt['pixel_criterion'])
+            #else:
+            #    self.Reconstruction_forw = ReconstructionLoss(losstype=self.train_opt['pixel_criterion_forw'])
+            #    self.Reconstruction_back = ReconstructionLoss(losstype=self.train_opt['pixel_criterion_back'])
             if self.train_opt['pixel_criterion']:
-                self.Reconstruction_forw = ReconstructionLoss(losstype=self.train_opt['pixel_criterion'])
-                self.Reconstruction_back = ReconstructionLoss(losstype=self.train_opt['pixel_criterion'])
+                if self.train_opt['pixel_critetion'] == 'l2':
+                    self.Reconstruction_forw = nn.MSELoss().to(self.device)
+                    self.Reconstruction_back = nn.MSELoss().to(self.device)
+                else:
+                    self.Reconstruction_forw = nn.L1Loss().to(self.device)
+                    self.Reconstruction_back = nn.L1Loss().to(self.device)
             else:
-                self.Reconstruction_forw = ReconstructionLoss(losstype=self.train_opt['pixel_criterion_forw'])
-                self.Reconstruction_back = ReconstructionLoss(losstype=self.train_opt['pixel_criterion_back'])
+                if self.train_opt['pixel_critetion_forw'] == 'l2':
+                    self.Reconstruction_forw = nn.MSELoss().to(self.device)
+                else:
+                    self.Reconstruction_forw = nn.L1Loss().to(self.device)
+                if self.train_opt['pixel_critetion_back'] == 'l2':
+                    self.Reconstruction_back = nn.MSELoss().to(self.device)
+                else:
+                    self.Reconstruction_back = nn.L1Loss().to(self.device)
 
             # feature loss
-            if self.train_opt['feature_criterion']:
-                if self.train_opt['normalize_feature']:
-                    self.Reconstructionf = FeatureNormalizeLoss(losstype=self.train_opt['feature_criterion'])
-                else:
-                    self.Reconstructionf = ReconstructionLoss(losstype=self.train_opt['feature_criterion'])
+            #if self.train_opt['feature_criterion']:
+            #    if self.train_opt['normalize_feature']:
+            #        self.Reconstructionf = FeatureNormalizeLoss(losstype=self.train_opt['feature_criterion'])
+            #    else:
+            #        self.Reconstructionf = ReconstructionLoss(losstype=self.train_opt['feature_criterion'])
+            #else:
+            #    if self.train_opt['normalize_feature']:
+            #        self.Reconstructionf = FeatureNormalizeLoss()
+            #    else:
+            #        self.Reconstructionf = ReconstructionLoss()
+            if self.train_opt['feature_critetion'] == 'l2':
+                self.Reconstructionf = nn.MSELoss().to(self.device)
             else:
-                if self.train_opt['normalize_feature']:
-                    self.Reconstructionf = FeatureNormalizeLoss()
-                else:
-                    self.Reconstructionf = ReconstructionLoss()
+                self.Reconstructionf = nn.L1Loss().to(self.device)
 
             if train_opt['feature_weight'] > 0:
                 self.l_fea_w = train_opt['feature_weight']
