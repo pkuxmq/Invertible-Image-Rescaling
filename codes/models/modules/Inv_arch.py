@@ -3,7 +3,6 @@ import torch
 import torch.nn as nn
 import torch.nn.functional as F
 import numpy as np
-#import models.modules.module_util as mutil
 
 
 class InvBlock(nn.Module):
@@ -15,7 +14,6 @@ class InvBlock(nn.Module):
 
         self.F = subnet_constructor(self.split_len2, self.split_len1)
         self.G = subnet_constructor(self.split_len1, self.split_len2)
-        #print(self)
 
     def forward(self, x, rev=False):
         x1, x2 = (x.narrow(1, 0, self.split_len1), x.narrow(1, self.split_len1, self.split_len2))
@@ -45,141 +43,18 @@ class InvBlockExp(nn.Module):
         self.F = subnet_constructor(self.split_len2, self.split_len1)
         self.G = subnet_constructor(self.split_len1, self.split_len2)
         self.H = subnet_constructor(self.split_len1, self.split_len2)
-        #print(self)
-
-    def e(self, s):
-        return torch.exp(self.clamp * 0.636 * torch.atan(s))
-
-    def log_e(self, s):
-        return self.clamp * 0.636 * torch.atan(s)
 
     def forward(self, x, rev=False):
-        if math.isinf(torch.sum(x)):
-            print('Get INF in the block input')
-        if math.isnan(torch.sum(x)):
-            print('Get NaN in the block input')
-
         x1, x2 = (x.narrow(1, 0, self.split_len1), x.narrow(1, self.split_len1, self.split_len2))
 
         if not rev:
             y1 = x1 + self.F(x2)
-            s1 = self.H(y1)
-            self.s1 = s1
-            t1 = self.G(y1)
-            y2 = x2.mul(self.e(s1)) + t1
-        else:
-            s1 = self.H(x1)
-            self.s1 = s1
-            t1 = self.G(x1)
-            y2 = (x2 - t1).div(self.e(s1))
-            y1 = x1 - self.F(y2)
-
-        y = torch.cat((y1, y2), 1)
-        if math.isinf(torch.sum(y)):
-            print('Get INF in the block output')
-        if math.isnan(torch.sum(y)):
-            print('Get NaN in the block output')
-
-        #return torch.cat((y1, y2), 1)
-        return y
-
-    def jacobian(self, x, rev=False):
-        if not rev:
-            jac = torch.sum(self.log_e(self.s1))
-        else:
-            jac = -torch.sum(self.log_e(self.s1))
-
-        return jac / x.shape[0]
-
-
-class InvBlockSigmoid(nn.Module):
-    def __init__(self, subnet_constructor, channel_num, channel_split_num):
-        super(InvBlockSigmoid, self).__init__()
-
-        self.split_len1 = channel_split_num
-        self.split_len2 = channel_num - channel_split_num
-
-        self.F = subnet_constructor(self.split_len2, self.split_len1)
-        self.G = subnet_constructor(self.split_len1, self.split_len2)
-        self.H = subnet_constructor(self.split_len1, self.split_len2)
-        #print(self)
-
-    def forward(self, x, rev=False):
-        if math.isinf(torch.sum(x)):
-            print('Get INF in the block input')
-        if math.isnan(torch.sum(x)):
-            print('Get NaN in the block input')
-
-        x1, x2 = (x.narrow(1, 0, self.split_len1), x.narrow(1, self.split_len1, self.split_len2))
-
-        if not rev:
-            y1 = x1 + self.F(x2)
-            self.s = torch.sigmoid(self.H(y1)) * 2
-            y2 = x2.mul(self.s) + self.G(y1)
-        else:
-            self.s = torch.sigmoid(self.H(x1)) * 2
-            y2 = (x2 - self.G(x1)).div(self.s + 1e-6)
-            y1 = x1 - self.F(y2)
-
-        y = torch.cat((y1, y2), 1)
-        if math.isinf(torch.sum(y)):
-            print('Get INF in the block output')
-        if math.isnan(torch.sum(y)):
-            print('Get NaN in the block output')
-            if rev:
-                print('sigmoid: ' + str(torch.sigmoid(self.H(x1))))
-            else:
-                print('sigmoid: ' + str(torch.sigmoid(self.H(y1))))
-
-        return torch.cat((y1, y2), 1)
-
-    def jacobian(self, x, rev=False):
-        if not rev:
-            jac = torch.sum(torch.log(self.s))
-        else:
-            jac = -torch.sum(torch.log(self.s))
-
-        return jac / x.shape[0]
-
-
-class InvBlockExpSigmoid(nn.Module):
-    def __init__(self, subnet_constructor, channel_num, channel_split_num):
-        super(InvBlockExpSigmoid, self).__init__()
-
-        self.split_len1 = channel_split_num
-        self.split_len2 = channel_num - channel_split_num
-
-        self.F = subnet_constructor(self.split_len2, self.split_len1)
-        self.G = subnet_constructor(self.split_len1, self.split_len2)
-        self.H = subnet_constructor(self.split_len1, self.split_len2)
-        #print(self)
-
-    def forward(self, x, rev=False):
-        if math.isinf(torch.sum(x)):
-            print('Get INF in the block input')
-        if math.isnan(torch.sum(x)):
-            print('Get NaN in the block input')
-
-        x1, x2 = (x.narrow(1, 0, self.split_len1), x.narrow(1, self.split_len1, self.split_len2))
-
-        if not rev:
-            y1 = x1 + self.F(x2)
-            self.s = torch.sigmoid(self.H(y1)) * 2 - 1
+            self.s = self.clamp * (torch.sigmoid(self.H(y1)) * 2 - 1)
             y2 = x2.mul(torch.exp(self.s)) + self.G(y1)
         else:
-            self.s = torch.sigmoid(self.H(x1)) * 2 - 1
+            self.s = self.clamp * (torch.sigmoid(self.H(x1)) * 2 - 1)
             y2 = (x2 - self.G(x1)).div(torch.exp(self.s))
             y1 = x1 - self.F(y2)
-
-        y = torch.cat((y1, y2), 1)
-        if math.isinf(torch.sum(y)):
-            print('Get INF in the block output')
-        if math.isnan(torch.sum(y)):
-            print('Get NaN in the block output')
-            if rev:
-                print('sigmoid: ' + str(torch.sigmoid(self.H(x1))))
-            else:
-                print('sigmoid: ' + str(torch.sigmoid(self.H(y1))))
 
         return torch.cat((y1, y2), 1)
 
@@ -192,47 +67,33 @@ class InvBlockExpSigmoid(nn.Module):
         return jac / x.shape[0]
 
 
-class InvBlockExpSigmoid2(nn.Module):
-    def __init__(self, subnet_constructor, channel_num, channel_split_num):
-        super(InvBlockExpSigmoid2, self).__init__()
+class InvBlockExp2(nn.Module):
+    def __init__(self, subnet_constructor, channel_num, channel_split_num, clamp=1.):
+        super(InvBlockExp2, self).__init__()
 
         self.split_len1 = channel_split_num
         self.split_len2 = channel_num - channel_split_num
+
+        self.clamp = clamp
 
         self.F = subnet_constructor(self.split_len2, self.split_len1)
         self.G = subnet_constructor(self.split_len1, self.split_len2)
         self.H = subnet_constructor(self.split_len1, self.split_len2)
         self.I = subnet_constructor(self.split_len2, self.split_len1)
-        #print(self)
 
     def forward(self, x, rev=False):
-        if math.isinf(torch.sum(x)):
-            print('Get INF in the block input')
-        if math.isnan(torch.sum(x)):
-            print('Get NaN in the block input')
-
         x1, x2 = (x.narrow(1, 0, self.split_len1), x.narrow(1, self.split_len1, self.split_len2))
 
         if not rev:
-            self.s1 = torch.sigmoid(self.I(x2)) * 2 - 1
+            self.s1 = self.clamp * (torch.sigmoid(self.I(x2)) * 2 - 1)
             y1 = x1.mul(torch.exp(self.s1)) + self.F(x2)
-            self.s2 = torch.sigmoid(self.H(y1)) * 2 - 1
+            self.s2 = self.clamp * (torch.sigmoid(self.H(y1)) * 2 - 1)
             y2 = x2.mul(torch.exp(self.s2)) + self.G(y1)
         else:
-            self.s2 = torch.sigmoid(self.H(x1)) * 2 - 1
+            self.s2 = self.clamp * (torch.sigmoid(self.H(x1)) * 2 - 1)
             y2 = (x2 - self.G(x1)).div(torch.exp(self.s2))
-            self.s1 = torch.sigmoid(self.I(y2)) * 2 - 1
+            self.s1 = self.clamp * (torch.sigmoid(self.I(y2)) * 2 - 1)
             y1 = (x1 - self.F(y2)).div(torch.exp(self.s1))
-
-        y = torch.cat((y1, y2), 1)
-        if math.isinf(torch.sum(y)):
-            print('Get INF in the block output')
-        if math.isnan(torch.sum(y)):
-            print('Get NaN in the block output')
-            if rev:
-                print('sigmoid: ' + str(torch.sigmoid(self.H(x1))))
-            else:
-                print('sigmoid: ' + str(torch.sigmoid(self.H(y1))))
 
         return torch.cat((y1, y2), 1)
 
@@ -250,7 +111,6 @@ class HaarDownsampling(nn.Module):
         super(HaarDownsampling, self).__init__()
         self.channel_in = channel_in
 
-        #self.haar_weights = torch.ones(4, 1, 2, 2, dtype=torch.double)
         self.haar_weights = torch.ones(4, 1, 2, 2)
 
         self.haar_weights[1, 0, 0, 1] = -1
@@ -306,7 +166,7 @@ class ShuffleChannel(nn.Module):
 
 
 class InvSRNet(nn.Module):
-    def __init__(self, channel_in=3, channel_out=3, subnet_constructor=None, block_num=[], upscale_log=2, shuffle_stage1=False):
+    def __init__(self, block_type, channel_in=3, channel_out=3, subnet_constructor=None, block_num=[], upscale_log=2, shuffle_stage1=False):
         super(InvSRNet, self).__init__()
         self.upscale_log = upscale_log
 
@@ -314,7 +174,15 @@ class InvSRNet(nn.Module):
 
         channel_split_num1 = channel_in // 2
         for i in range(block_num[0]):
-            b = InvBlock(subnet_constructor, channel_in, channel_split_num1)
+            if block_type == 'InvBlock':
+                b = InvBlock(subnet_constructor, channel_in, channel_split_num1)
+            elif block_type == 'InvBlockExp':
+                b = InvBlockExp(subnet_constructor, channel_in, channel_split_num1)
+            elif block_type == 'InvBlockExp2':
+                b = InvBlockExp2(subnet_constructor, channel_in, channel_split_num1)
+            else:
+                print("Error! Undefined block type!")
+                exit(1)
             operations.append(b)
             if shuffle_stage1:
                 if i != block_num[0] - 1 or block_num[0] % 2 == 0:
@@ -329,340 +197,33 @@ class InvSRNet(nn.Module):
             operations.append(b)
             current_channel *= 4
             for j in range(block_num[i + 1]):
-                b = InvBlock(subnet_constructor, current_channel, channel_out)
+                if block_type == 'InvBlock':
+                    b = InvBlock(subnet_constructor, current_channel, channel_out)
+                elif block_type == 'InvBlockExp':
+                    b = InvBlockExp(subnet_constructor, current_channel, channel_out)
+                elif block_type == 'InvBlockExp2':
+                    b = InvBlockExp2(subnet_constructor, current_channel, channel_out)
+                else:
+                    print("Error! Undefined block type!")
+                    exit(1)
                 operations.append(b)
 
         self.operations = nn.ModuleList(operations)
-
-        ## initialization
-        #mutil.initialize_weights([self.conv_first, self.upconv1, self.HRconv, self.conv_last], 0.1)
-        #if self.upscale == 4:
-        #    mutil.initialize_weights(self.upconv2, 0.1)
 
     def forward(self, x, rev=False, cal_jacobian=False):
         out = x
         jacobian = 0
 
         if not rev:
-            i = 0
             for op in self.operations:
                 out = op.forward(out, rev)
                 if cal_jacobian:
                     jacobian += op.jacobian(out, rev)
-                i += 1
-                print('forward sum ' + str(torch.sum(out)))
-                if math.isinf(torch.sum(out)):
-                    print('Get INF in forward block ' + str(i))
-                    exit()
-                if math.isnan(torch.sum(out)):
-                    print('Get NaN in forward block ' + str(i))
-                    exit()
         else:
-            i = 0
             for op in reversed(self.operations):
                 out = op.forward(out, rev)
                 if cal_jacobian:
                     jacobian += op.jacobian(out, rev)
-                i += 1
-                print('backward sum ' + str(torch.sum(out)))
-                if math.isinf(torch.sum(out)):
-                    print('Get INF in backward block ' + str(i))
-                    exit()
-                if math.isnan(torch.sum(out)):
-                    print('Get NaN in backward block ' + str(i))
-                    exit()
-
-        if cal_jacobian:
-            return out, jacobian
-        else:
-            return out
-
-
-class InvExpSRNet(nn.Module):
-    def __init__(self, channel_in=3, channel_out=3, subnet_constructor=None, block_num=[], upscale_log=2, shuffle_stage1=True):
-        super(InvExpSRNet, self).__init__()
-        self.upscale_log = upscale_log
-
-        operations = []
-
-        channel_split_num1 = channel_in // 2
-        for i in range(block_num[0]):
-            b = InvBlockExp(subnet_constructor, channel_in, channel_split_num1)
-            operations.append(b)
-            if shuffle_stage1:
-                if i != block_num[0] - 1 or block_num[0] % 2 == 0:
-                    if i % 2 == 0:
-                        operations.append(ShuffleChannel(channel_in, channel_split_num1))
-                    else:
-                        operations.append(ShuffleChannel(channel_in, channel_in - channel_split_num1))
-
-        current_channel = channel_in
-        for i in range(upscale_log):
-            b = HaarDownsampling(current_channel)
-            operations.append(b)
-            current_channel *= 4
-            for j in range(block_num[i + 1]):
-                b = InvBlockExp(subnet_constructor, current_channel, channel_out)
-                operations.append(b)
-
-        self.operations = nn.ModuleList(operations)
-
-        ## initialization
-        #mutil.initialize_weights([self.conv_first, self.upconv1, self.HRconv, self.conv_last], 0.1)
-        #if self.upscale == 4:
-        #    mutil.initialize_weights(self.upconv2, 0.1)
-
-    def forward(self, x, rev=False, cal_jacobian=False):
-        out = x
-        jacobian = 0
-
-        if not rev:
-            i = 0
-            for op in self.operations:
-                out = op.forward(out, rev)
-                if cal_jacobian:
-                    jacobian += op.jacobian(out, rev)
-                i += 1
-                #print('forward sum ' + str(torch.sum(out)))
-                if math.isinf(torch.sum(out)):
-                    print('Get INF in forward block ' + str(i))
-                    exit()
-                if math.isnan(torch.sum(out)):
-                    print('Get NaN in forward block ' + str(i))
-                    exit()
-        else:
-            i = 0
-            for op in reversed(self.operations):
-                out = op.forward(out, rev)
-                if cal_jacobian:
-                    jacobian += op.jacobian(out, rev)
-                i += 1
-                #print('backward sum ' + str(torch.sum(out)))
-                if math.isinf(torch.sum(out)):
-                    print('Get INF in backward block ' + str(i))
-                    exit()
-                if math.isnan(torch.sum(out)):
-                    print('Get NaN in backward block ' + str(i))
-                    exit()
-
-        if cal_jacobian:
-            return out, jacobian
-        else:
-            return out
-
-
-class InvSigmoidSRNet(nn.Module):
-    def __init__(self, channel_in=3, channel_out=3, subnet_constructor=None, block_num=[], upscale_log=2, shuffle_stage1=True):
-        super(InvSigmoidSRNet, self).__init__()
-        self.upscale_log = upscale_log
-
-        operations = []
-
-        channel_split_num1 = channel_in // 2
-        for i in range(block_num[0]):
-            b = InvBlockSigmoid(subnet_constructor, channel_in, channel_split_num1)
-            operations.append(b)
-            if shuffle_stage1:
-                if i != block_num[0] - 1 or block_num[0] % 2 == 0:
-                    if i % 2 == 0:
-                        operations.append(ShuffleChannel(channel_in, channel_split_num1))
-                    else:
-                        operations.append(ShuffleChannel(channel_in, channel_in - channel_split_num1))
-
-        current_channel = channel_in
-        for i in range(upscale_log):
-            b = HaarDownsampling(current_channel)
-            operations.append(b)
-            current_channel *= 4
-            for j in range(block_num[i + 1]):
-                b = InvBlockSigmoid(subnet_constructor, current_channel, channel_out)
-                operations.append(b)
-
-        self.operations = nn.ModuleList(operations)
-
-        ## initialization
-        #mutil.initialize_weights([self.conv_first, self.upconv1, self.HRconv, self.conv_last], 0.1)
-        #if self.upscale == 4:
-        #    mutil.initialize_weights(self.upconv2, 0.1)
-
-    def forward(self, x, rev=False, cal_jacobian=False):
-        out = x
-        jacobian = 0
-
-        if not rev:
-            i = 0
-            for op in self.operations:
-                out = op.forward(out, rev)
-                if cal_jacobian:
-                    jacobian += op.jacobian(out, rev)
-                i += 1
-                print('forward sum ' + str(torch.sum(out)))
-                if math.isinf(torch.sum(out)):
-                    print('Get INF in forward block ' + str(i))
-                    exit()
-                if math.isnan(torch.sum(out)):
-                    print('Get NaN in forward block ' + str(i))
-                    exit()
-        else:
-            i = 0
-            for op in reversed(self.operations):
-                out = op.forward(out, rev)
-                if cal_jacobian:
-                    jacobian += op.jacobian(out, rev)
-                i += 1
-                print('backward sum ' + str(torch.sum(out)))
-                if math.isinf(torch.sum(out)):
-                    print('Get INF in backward block ' + str(i))
-                    exit()
-                if math.isnan(torch.sum(out)):
-                    print('Get NaN in backward block ' + str(i))
-                    exit()
-
-        if cal_jacobian:
-            return out, jacobian
-        else:
-            return out
-
-
-class InvExpSigmoidSRNet(nn.Module):
-    def __init__(self, channel_in=3, channel_out=3, subnet_constructor=None, block_num=[], upscale_log=2, shuffle_stage1=True):
-        super(InvExpSigmoidSRNet, self).__init__()
-        self.upscale_log = upscale_log
-
-        operations = []
-
-        channel_split_num1 = channel_in // 2
-        for i in range(block_num[0]):
-            b = InvBlockExpSigmoid(subnet_constructor, channel_in, channel_split_num1)
-            operations.append(b)
-            if shuffle_stage1:
-                if i != block_num[0] - 1 or block_num[0] % 2 == 0:
-                    if i % 2 == 0:
-                        operations.append(ShuffleChannel(channel_in, channel_split_num1))
-                    else:
-                        operations.append(ShuffleChannel(channel_in, channel_in - channel_split_num1))
-
-        current_channel = channel_in
-        for i in range(upscale_log):
-            b = HaarDownsampling(current_channel)
-            operations.append(b)
-            current_channel *= 4
-            for j in range(block_num[i + 1]):
-                b = InvBlockExpSigmoid(subnet_constructor, current_channel, channel_out)
-                operations.append(b)
-
-        self.operations = nn.ModuleList(operations)
-
-        ## initialization
-        #mutil.initialize_weights([self.conv_first, self.upconv1, self.HRconv, self.conv_last], 0.1)
-        #if self.upscale == 4:
-        #    mutil.initialize_weights(self.upconv2, 0.1)
-
-    def forward(self, x, rev=False, cal_jacobian=False):
-        out = x
-        jacobian = 0
-
-        if not rev:
-            i = 0
-            for op in self.operations:
-                out = op.forward(out, rev)
-                if cal_jacobian:
-                    jacobian += op.jacobian(out, rev)
-                i += 1
-                #print('forward sum ' + str(torch.sum(out)))
-                if math.isinf(torch.sum(out)):
-                    print('Get INF in forward block ' + str(i))
-                    exit()
-                if math.isnan(torch.sum(out)):
-                    print('Get NaN in forward block ' + str(i))
-                    exit()
-        else:
-            i = 0
-            for op in reversed(self.operations):
-                out = op.forward(out, rev)
-                if cal_jacobian:
-                    jacobian += op.jacobian(out, rev)
-                i += 1
-                #print('backward sum ' + str(torch.sum(out)))
-                if math.isinf(torch.sum(out)):
-                    print('Get INF in backward block ' + str(i))
-                    exit()
-                if math.isnan(torch.sum(out)):
-                    print('Get NaN in backward block ' + str(i))
-                    exit()
-
-        if cal_jacobian:
-            return out, jacobian
-        else:
-            return out
-
-
-class InvExpSigmoid2SRNet(nn.Module):
-    def __init__(self, channel_in=3, channel_out=3, subnet_constructor=None, block_num=[], upscale_log=2, shuffle_stage1=True):
-        super(InvExpSigmoid2SRNet, self).__init__()
-        self.upscale_log = upscale_log
-
-        operations = []
-
-        channel_split_num1 = channel_in // 2
-        for i in range(block_num[0]):
-            b = InvBlockExpSigmoid2(subnet_constructor, channel_in, channel_split_num1)
-            operations.append(b)
-            if shuffle_stage1:
-                if i != block_num[0] - 1 or block_num[0] % 2 == 0:
-                    if i % 2 == 0:
-                        operations.append(ShuffleChannel(channel_in, channel_split_num1))
-                    else:
-                        operations.append(ShuffleChannel(channel_in, channel_in - channel_split_num1))
-
-        current_channel = channel_in
-        for i in range(upscale_log):
-            b = HaarDownsampling(current_channel)
-            operations.append(b)
-            current_channel *= 4
-            for j in range(block_num[i + 1]):
-                b = InvBlockExpSigmoid2(subnet_constructor, current_channel, channel_out)
-                operations.append(b)
-
-        self.operations = nn.ModuleList(operations)
-
-        ## initialization
-        #mutil.initialize_weights([self.conv_first, self.upconv1, self.HRconv, self.conv_last], 0.1)
-        #if self.upscale == 4:
-        #    mutil.initialize_weights(self.upconv2, 0.1)
-
-    def forward(self, x, rev=False, cal_jacobian=False):
-        out = x
-        jacobian = 0
-
-        if not rev:
-            i = 0
-            for op in self.operations:
-                out = op.forward(out, rev)
-                if cal_jacobian:
-                    jacobian += op.jacobian(out, rev)
-                i += 1
-                #print('forward sum ' + str(torch.sum(out)))
-                if math.isinf(torch.sum(out)):
-                    print('Get INF in forward block ' + str(i))
-                    exit()
-                if math.isnan(torch.sum(out)):
-                    print('Get NaN in forward block ' + str(i))
-                    exit()
-        else:
-            i = 0
-            for op in reversed(self.operations):
-                out = op.forward(out, rev)
-                if cal_jacobian:
-                    jacobian += op.jacobian(out, rev)
-                i += 1
-                #print('backward sum ' + str(torch.sum(out)))
-                if math.isinf(torch.sum(out)):
-                    print('Get INF in backward block ' + str(i))
-                    exit()
-                if math.isnan(torch.sum(out)):
-                    print('Get NaN in backward block ' + str(i))
-                    exit()
 
         if cal_jacobian:
             return out, jacobian

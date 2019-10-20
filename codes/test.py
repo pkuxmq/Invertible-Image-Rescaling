@@ -61,7 +61,6 @@ for test_loader in test_loaders:
         visuals = model.get_current_visuals(need_GT=need_GT)
 
         sr_img = util.tensor2img(visuals['SR'])  # uint8
-        srf_img = util.tensor2img(visuals['SR_forw'])
 
         # save images
         suffix = opt['suffix']
@@ -71,27 +70,18 @@ for test_loader in test_loaders:
             save_img_path = osp.join(dataset_dir, img_name + '.png')
         util.save_img(sr_img, save_img_path)
 
-        if suffix:
-            save_img_path_f = osp.join(dataset_dir, img_name + suffix + '_forw.png')
-        else:
-            save_img_path_f = osp.join(dataset_dir, img_name + '_forw.png')
-        util.save_img(srf_img, save_img_path_f)
-
         # calculate PSNR and SSIM
         if need_GT:
             gt_img = util.tensor2img(visuals['GT'])
             gt_img = gt_img / 255.
             sr_img = sr_img / 255.
-            srf_img = srf_img / 255.
 
             crop_border = opt['crop_border'] if opt['crop_border'] else opt['scale']
             if crop_border == 0:
                 cropped_sr_img = sr_img
-                cropped_srf_img = srf_img
                 cropped_gt_img = gt_img
             else:
                 cropped_sr_img = sr_img[crop_border:-crop_border, crop_border:-crop_border, :]
-                cropped_srf_img = srf_img[crop_border:-crop_border, crop_border:-crop_border, :]
                 cropped_gt_img = gt_img[crop_border:-crop_border, crop_border:-crop_border, :]
 
             psnr = util.calculate_psnr(cropped_sr_img * 255, cropped_gt_img * 255)
@@ -99,36 +89,24 @@ for test_loader in test_loaders:
             test_results['psnr'].append(psnr)
             test_results['ssim'].append(ssim)
 
-            psnr_forw = util.calculate_psnr(cropped_srf_img * 255, cropped_gt_img * 255)
-            ssim_forw = util.calculate_ssim(cropped_srf_img * 255, cropped_gt_img * 255)
-            test_results['psnr_forw'].append(psnr_forw)
-            test_results['ssim_forw'].append(ssim_forw)
-
             if gt_img.shape[2] == 3:  # RGB image
                 sr_img_y = bgr2ycbcr(sr_img, only_y=True)
-                srf_img_y = bgr2ycbcr(srf_img, only_y=True)
                 gt_img_y = bgr2ycbcr(gt_img, only_y=True)
                 if crop_border == 0:
                     cropped_sr_img_y = sr_img_y
-                    cropped_srf_img_y = srf_img_y
                     cropped_gt_img_y = gt_img_y
                 else:
                     cropped_sr_img_y = sr_img_y[crop_border:-crop_border, crop_border:-crop_border]
-                    cropped_srf_img_y = srf_img_y[crop_border:-crop_border, crop_border:-crop_border]
                     cropped_gt_img_y = gt_img_y[crop_border:-crop_border, crop_border:-crop_border]
                 psnr_y = util.calculate_psnr(cropped_sr_img_y * 255, cropped_gt_img_y * 255)
                 ssim_y = util.calculate_ssim(cropped_sr_img_y * 255, cropped_gt_img_y * 255)
                 test_results['psnr_y'].append(psnr_y)
                 test_results['ssim_y'].append(ssim_y)
-                psnr_y_forw = util.calculate_psnr(cropped_srf_img_y * 255, cropped_gt_img_y * 255)
-                ssim_y_forw = util.calculate_ssim(cropped_srf_img_y * 255, cropped_gt_img_y * 255)
-                test_results['psnr_y_forw'].append(psnr_y_forw)
-                test_results['ssim_y_forw'].append(ssim_y_forw)
                 logger.info(
-                    '{:20s} - PSNR: {:.6f} dB; SSIM: {:.6f}; PSNR_Y: {:.6f} dB; SSIM_Y: {:.6f}; PSNR_forw: {:.6f} dB; SSIM_forw: {:.6f}; PSNR_Y_forw: {:.6f} dB; SSIM_Y_forw: {:.6f}.'.
-                    format(img_name, psnr, ssim, psnr_y, ssim_y, psnr_forw, ssim_forw, psnr_y_forw, ssim_y_forw))
+                    '{:20s} - PSNR: {:.6f} dB; SSIM: {:.6f}; PSNR_Y: {:.6f} dB; SSIM_Y: {:.6f}.'.
+                    format(img_name, psnr, ssim, psnr_y, ssim_y))
             else:
-                logger.info('{:20s} - PSNR: {:.6f} dB; SSIM: {:.6f}; PSNR_forw: {:.6f} dB; SSIM_forw: {:.6f}.'.format(img_name, psnr, ssim, psnr_forw, ssim_forw))
+                logger.info('{:20s} - PSNR: {:.6f} dB; SSIM: {:.6f}.'.format(img_name, psnr, ssim))
         else:
             logger.info(img_name)
 
@@ -136,16 +114,12 @@ for test_loader in test_loaders:
         # Average PSNR/SSIM results
         ave_psnr = sum(test_results['psnr']) / len(test_results['psnr'])
         ave_ssim = sum(test_results['ssim']) / len(test_results['ssim'])
-        ave_psnr_forw = sum(test_results['psnr_forw']) / len(test_results['psnr_forw'])
-        ave_ssim_forw = sum(test_results['ssim_forw']) / len(test_results['ssim_forw'])
         logger.info(
-            '----Average PSNR/SSIM results for {}----\n\tpsnr: {:.6f} db; ssim: {:.6f}; psnr_forw: {:.6f} db; ssim_forw: {:.6f}\n'.format(
-                test_set_name, ave_psnr, ave_ssim, ave_psnr_forw, ave_ssim_forw))
+            '----Average PSNR/SSIM results for {}----\n\tpsnr: {:.6f} db; ssim: {:.6f}\n'.format(
+                test_set_name, ave_psnr, ave_ssim))
         if test_results['psnr_y'] and test_results['ssim_y']:
             ave_psnr_y = sum(test_results['psnr_y']) / len(test_results['psnr_y'])
             ave_ssim_y = sum(test_results['ssim_y']) / len(test_results['ssim_y'])
-            ave_psnr_y_forw = sum(test_results['psnr_y_forw']) / len(test_results['psnr_y_forw'])
-            ave_ssim_y_forw = sum(test_results['ssim_y_forw']) / len(test_results['ssim_y_forw'])
             logger.info(
-                '----Y channel, average PSNR/SSIM----\n\tPSNR_Y: {:.6f} dB; SSIM_Y: {:.6f}; PSNR_Y_forw: {:.6f} dB; SSIM_Y_forw: {:.6f}\n'.
-                format(ave_psnr_y, ave_ssim_y, ave_psnr_y_forw, ave_ssim_y_forw))
+                '----Y channel, average PSNR/SSIM----\n\tPSNR_Y: {:.6f} dB; SSIM_Y: {:.6f}\n'.
+                format(ave_psnr_y, ave_ssim_y))

@@ -7,14 +7,9 @@ from torch.nn.parallel import DataParallel, DistributedDataParallel
 import models.networks as networks
 import models.lr_scheduler as lr_scheduler
 from .base_model import BaseModel
-from models.modules.loss import *
+from models.modules.loss import GANLoss
 
 logger = logging.getLogger('base')
-
-class Config_MMD(object):
-    def __init__(self, device, mmd_kernels):
-        self.device = device
-        self.mmd_kernels = mmd_kernels
 
 class InvGANforwSRModel(BaseModel):
     def __init__(self, opt):
@@ -49,24 +44,6 @@ class InvGANforwSRModel(BaseModel):
             self.netD_forw.train()
 
             # loss
-            #mmd_forw_kernels = [(0.2, 2), (1.5, 2), (3.0, 2)]
-            #mmd_back_kernels = [(0.2, 0.1), (0.2, 0.5), (0.2, 2)]
-            ##config_mmd_forw = Config_MMD(self.device, train_opt['mmd_forw_kernels'])
-            ##config_mmd_back = Config_MMD(self.device, train_opt['mmd_back_kernels'])
-            #config_mmd_forw = Config_MMD(self.device, mmd_forw_kernels)
-            #config_mmd_back = Config_MMD(self.device, mmd_back_kernels)
-
-            #self.MMD_forward = MMDLoss(config_mmd_forw) 
-            #self.MMD_backward = MMDLoss(config_mmd_back) 
-
-            #if self.train_opt['pixel_criterion']:
-            #    self.Reconstruction = ReconstructionLoss(losstype=self.train_opt['pixel_criterion'])
-            #else:
-            #    self.Reconstruction = ReconstructionLoss()
-            #if self.train_opt['pixel_critetion'] == 'l2':
-            #    self.Reconstruction = nn.MSELoss().to(self.device)
-            #else:
-            #    self.Reconstruction = nn.L1Loss().to(self.device)
             if self.train_opt['pixel_criterion']:
                 if self.train_opt['pixel_critetion'] == 'l2':
                     self.Reconstruction_forw = nn.MSELoss().to(self.device)
@@ -100,9 +77,9 @@ class InvGANforwSRModel(BaseModel):
             for k, v in self.netG.named_parameters():
                 if v.requires_grad:
                     optim_params.append(v)
-                #else:
-                #    if self.rank <= 0:
-                #        logger.waring('Params [{:s}] will not optimize.'.format(k))
+                else:
+                    if self.rank <= 0:
+                        logger.warning('Params [{:s}] will not optimize.'.format(k))
             self.optimizer_G = torch.optim.Adam(optim_params, lr=train_opt['lr_G'],
                                                 weight_decay=wd_G,
                                                 betas=(train_opt['beta1'], train_opt['beta2']))
@@ -143,9 +120,6 @@ class InvGANforwSRModel(BaseModel):
     def noise_batch(self, dims):
         return torch.randn(tuple(dims)).to(self.device)
 
-    def zeros_batch(self, dims):
-        return torch.zeros(tuple(dims)).to(self.device)
-
     def loss_forward(self, out, y):
 
         l_forw_fit = self.train_opt['lambda_fit_forw'] * self.Reconstruction_forw(out[:, :3, :, :], y[:, :3, :, :])
@@ -169,11 +143,6 @@ class InvGANforwSRModel(BaseModel):
     def loss_backward(self, x, x_samples):
         x_samples_image = x_samples[:, :3, :, :]
         l_back_rec = self.train_opt['lambda_rec_back'] * self.Reconstruction_back(x, x_samples_image)
-        if self.train_opt['padding_x']:
-            xx = x_samples[:, 3:, :, :].reshape([x_samples.shape[0], -1])
-            l_back_mle = self.train_opt['lambda_mle_back'] * torch.sum(torch.norm(xx, p=2, dim=1))
-        else:
-            l_back_mle = 0
 
         # feature loss
         l_back_fea = 0
@@ -181,7 +150,7 @@ class InvGANforwSRModel(BaseModel):
         # GAN loss
         l_back_gan = 0
 
-        return l_back_rec, l_back_mle, l_back_fea, l_back_gan
+        return l_back_rec, l_back_fea, l_back_gan
 
     def feature_loss(self, real, fake):
         real_fea = self.netF(real).detach()
@@ -197,28 +166,15 @@ class InvGANforwSRModel(BaseModel):
             p.requires_grad = False
 
         self.optimizer_G.zero_grad()
-        if self.train_opt['padding_x']:
-            self.padding_x_dim = self.train_opt['padding_x']
-            padding_xshape = [self.real_H.shape[0], self.padding_x_dim, self.real_H.shape[2], self.real_H.shape[3]]
-            self.input = torch.cat((self.real_H, self.noise_batch(padding_xshape)), dim=1)
-        else:
-            self.input = self.real_H
+        self.input = self.real_H
 
-        if self.train_opt['use_jacobian']:
-            self.output, jacobian = self.netG(self.input, rev=False, cal_jacobian=True)
-            loss = -jacobian
-        else:
-            self.output = self.netG(self.input)
-            loss = 0
+        self.output = self.netG(self.input)
+        loss = 0
 
         zshape = self.output[:, 3:, :, :].shape
         y = torch.cat((self.var_L, self.noise_batch(zshape)), dim=1)
-        #loss = self.loss_forward(self.output, y) + self.loss_backward(self.real_H, y)
 
-        if self.train_opt['use_learned_y']:
-            yy = torch.cat((self.output[:, :3, :, :], self.noise_batch(zshape)), dim=1)
-        else:
-            yy = y
+        yy = torch.cat((self.output[:, :3, :, :], self.noise_batch(zshape)), dim=1)
 
         self.fake_H = self.netG(yy, rev=True)
 
@@ -227,28 +183,9 @@ class InvGANforwSRModel(BaseModel):
             l_forw_fit, l_forw_gan, l_forw_mle = self.loss_forward(self.output, y)
 
             # backward loss
-            if self.train_opt['use_stage'] and step < self.train_opt['stage1_step']:
-                l_back_rec = 0
-                l_back_mle = 0
-                l_back_fea = 0
-                l_back_gan = 0
-            else:
-                l_back_rec, l_back_mle, l_back_fea, l_back_gan = self.loss_backward(self.real_H, self.fake_H)
-                if self.train_opt['learned_y_par']:
-                    self.fake_H_gtlr = self.netG(y, rev=True)
-                    l_back_rec_bicubic, l_back_mle_bicubic, l_back_fea_bicubic, l_back_gan_bicubic = self.loss_backward(self.real_H, self.fake_H_gtlr)
-                    l_back_rec = self.train_opt['learned_y_par'] * l_back_rec + (1 - self.train_opt['learned_y_par']) * l_back_rec_bicubic
-                    l_back_mle = self.train_opt['learned_y_par'] * l_back_mle + (1 - self.train_opt['learned_y_par']) * l_back_mle_bicubic
-                    l_back_fea = self.train_opt['learned_y_par'] * l_back_fea + (1 - self.train_opt['learned_y_par']) * l_back_fea_bicubic
-                    l_back_gan = self.train_opt['learned_y_par'] * l_back_gan + (1 - self.train_opt['learned_y_par']) * l_back_gan_bicubic
+            l_back_rec, l_back_fea, l_back_gan = self.loss_backward(self.real_H, self.fake_H)
 
-
-            loss += l_forw_fit + l_forw_gan + l_forw_mle + l_back_rec + l_back_mle + l_back_fea + l_back_gan
-
-            #print(str(l_forw_fit.item()) + "  ||  " + str(l_back_rec.item()) + "  ||  " + str(l_forw_mle.item()) + "  ||  " + str(l_back_mle.item()) + "  ||  " + str(l_g_gan.item()))
-            print(str(l_forw_fit) + "  ||  " + str(l_back_rec) + "  ||  " + str(l_forw_gan) + "  ||  " + str(l_forw_mle) + "  ||  " + str(l_back_gan) + " || " + str(l_back_fea))
-
-            #print(loss.item())
+            loss += l_forw_fit + l_forw_gan + l_forw_mle + l_back_rec + l_back_fea + l_back_gan
 
             loss.backward()
 
@@ -282,19 +219,16 @@ class InvGANforwSRModel(BaseModel):
 
         self.optimizer_D_forw.step()
 
-        ## set log
-        #self.log_dict['l_pix'] = l_pix.item()
+        # set log
+        self.log_dict['l_forw_fit'] = l_forw_fit.item()
+        self.log_dict['l_forw_gan'] = l_forw_gan.item()
+        self.log_dict['l_back_rec'] = l_back_rec.item()
+        self.log_dict['l_d_forw'] = l_d_forw_total.item()
 
     def test(self):
         Lshape = self.var_L.shape
-        if self.train_opt and self.train_opt['padding_x']:
-            self.padding_x_dim = self.train_opt['padding_x']
-            padding_xshape = [self.real_H.shape[0], self.padding_x_dim, self.real_H.shape[2], self.real_H.shape[3]]
-            self.input = torch.cat((self.real_H, self.noise_batch(padding_xshape)), dim=1)
-            input_dim = self.padding_x_dim + Lshape[1]
-        else:
-            input_dim = Lshape[1]
-            self.input = self.real_H
+        input_dim = Lshape[1]
+        self.input = self.real_H
 
         zshape = [Lshape[0], input_dim * (self.opt['scale']**2) - Lshape[1], Lshape[2], Lshape[3]]
 
@@ -302,55 +236,16 @@ class InvGANforwSRModel(BaseModel):
 
         if self.test_opt and self.test_opt['noise_scale']:
             noise_scale = self.test_opt['noise_scale']
-        y = torch.cat((self.var_L, noise_scale * self.noise_batch(zshape)), dim=1)
 
         self.netG.eval()
         with torch.no_grad():
-            self.fake_H = self.netG(y, rev=True)[:, :3, :, :]
-            
             self.forw_L = self.netG(self.input)[:, :3, :, :]
 
         y_forw = torch.cat((self.forw_L, noise_scale * self.noise_batch(zshape)), dim=1)
         with torch.no_grad():
-            self.fake_H_forw = self.netG(y_forw, rev=True)[:, :3, :, :]
+            self.fake_H = self.netG(y_forw, rev=True)[:, :3, :, :]
 
         self.netG.train()
-
-    #def test_x8(self):
-    #    # from https://github.com/thstkdgus35/EDSR-PyTorch
-    #    self.netG.eval()
-
-    #    def _transform(v, op):
-    #        # if self.precision != 'single': v = v.float()
-    #        v2np = v.data.cpu().numpy()
-    #        if op == 'v':
-    #            tfnp = v2np[:, :, :, ::-1].copy()
-    #        elif op == 'h':
-    #            tfnp = v2np[:, :, ::-1, :].copy()
-    #        elif op == 't':
-    #            tfnp = v2np.transpose((0, 1, 3, 2)).copy()
-
-    #        ret = torch.Tensor(tfnp).to(self.device)
-    #        # if self.precision == 'half': ret = ret.half()
-
-    #        return ret
-
-    #    lr_list = [self.var_L]
-    #    for tf in 'v', 'h', 't':
-    #        lr_list.extend([_transform(t, tf) for t in lr_list])
-    #    with torch.no_grad():
-    #        sr_list = [self.netG(aug) for aug in lr_list]
-    #    for i in range(len(sr_list)):
-    #        if i > 3:
-    #            sr_list[i] = _transform(sr_list[i], 't')
-    #        if i % 4 > 1:
-    #            sr_list[i] = _transform(sr_list[i], 'h')
-    #        if (i % 4) % 2 == 1:
-    #            sr_list[i] = _transform(sr_list[i], 'v')
-
-    #    output_cat = torch.cat(sr_list, dim=0)
-    #    self.fake_H = output_cat.mean(dim=0, keepdim=True)
-    #    self.netG.train()
 
     def get_current_log(self):
         return self.log_dict
@@ -360,7 +255,6 @@ class InvGANforwSRModel(BaseModel):
         out_dict['LQ'] = self.var_L.detach()[0].float().cpu()
         out_dict['SR'] = self.fake_H.detach()[0].float().cpu()
         out_dict['LR'] = self.forw_L.detach()[0].float().cpu()
-        out_dict['SR_forw'] = self.fake_H_forw.detach()[0].float().cpu()
         if need_GT:
             out_dict['GT'] = self.real_H.detach()[0].float().cpu()
         return out_dict

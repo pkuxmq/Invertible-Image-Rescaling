@@ -144,9 +144,6 @@ def main():
         current_step = 0
         start_epoch = 0
 
-    #for val_data in val_loader:
-    #    model.feed_data(val_data)
-    #    model.test()
     #### training
     logger.info('Start training from epoch: {:d}, iter: {:d}'.format(start_epoch, current_step))
     for epoch in range(start_epoch, total_epochs + 1):
@@ -196,7 +193,6 @@ def main():
                     gt_img = util.tensor2img(visuals['GT'])  # uint8
 
                     lr_img = util.tensor2img(visuals['LR'])
-                    srf_img = util.tensor2img(visuals['SR_forw'])
 
                     gtl_img = util.tensor2img(visuals['LQ'])
 
@@ -208,10 +204,6 @@ def main():
                     # Save LR images
                     save_img_path_L = os.path.join(img_dir, '{:s}_forwLR_{:d}.png'.format(img_name, current_step))
                     util.save_img(lr_img, save_img_path_L)
-
-                    # Save SR_forw images
-                    save_img_path_Sf = os.path.join(img_dir, '{:s}_SRforw_{:d}.png'.format(img_name, current_step))
-                    util.save_img(srf_img, save_img_path_Sf)
 
                     # Save ground truth
                     if current_step == opt['train']['val_freq']:
@@ -228,20 +220,13 @@ def main():
                     cropped_gt_img = gt_img[crop_size:-crop_size, crop_size:-crop_size, :]
                     avg_psnr += util.calculate_psnr(cropped_sr_img * 255, cropped_gt_img * 255)
 
-                    #gt_img = gt_img / 255.
-                    srf_img = srf_img / 255.
-                    cropped_srf_img = srf_img[crop_size:-crop_size, crop_size:-crop_size, :]
-                    #cropped_gt_img = gt_img[crop_size:-crop_size, crop_size:-crop_size, :]
-                    avg_psnr_forw += util.calculate_psnr(cropped_srf_img * 255, cropped_gt_img * 255)
-
                 avg_psnr = avg_psnr / idx
-                avg_psnr_forw = avg_psnr_forw / idx
 
                 # log
-                logger.info('# Validation # PSNR: {:.4e}, PSNR_forw: {:.4e}'.format(avg_psnr, avg_psnr_forw))
+                logger.info('# Validation # PSNR: {:.4e}'.format(avg_psnr))
                 logger_val = logging.getLogger('val')  # validation logger
-                logger_val.info('<epoch:{:3d}, iter:{:8,d}> psnr: {:.4e}, psnr_forw: {:.4e}'.format(
-                    epoch, current_step, avg_psnr, avg_psnr_forw))
+                logger_val.info('<epoch:{:3d}, iter:{:8,d}> psnr: {:.4e}'.format(
+                    epoch, current_step, avg_psnr))
                 # tensorboard logger
                 if opt['use_tb_logger'] and 'debug' not in opt['name']:
                     tb_logger.add_scalar('psnr', avg_psnr, current_step)

@@ -1,12 +1,7 @@
-# Not exactly the same as SRResNet in <Photo-Realistic Single Image Super-Resolution Using a Generative Adversarial Network>
-
-# With 16 Residual blocks w/o BN
-
-
 
 #### general settings
 
-name: 0_InvGANNoFeatureExpSigmoidSimpleNetInitXavier_wd_nommd_mle_learnedy_block16_l1_x4_scratch_DIV2K
+name: 01_IDCNN_GAN_DB_l2_x4_scratch_DIV2K
 
 use_tb_logger: true
 
@@ -92,7 +87,9 @@ datasets:
 
 network_G:
 
-  which_model_G: InvExpSigmoidSimpleNet
+  which_model_G:
+      block_type: InvBlockExp
+      subnet_type: DBNet
 
   in_nc: 3
 
@@ -118,7 +115,7 @@ network_D:
 
 path:
 
-  pretrain_model_G: /home/mingqing/InvSR/experiments/pretrained_models/latest_G.pth
+  pretrain_model_G: /home/mingqing/InvSR/experiments/pretrained_models/85000_G.pth
 
   strict_load: true
 
@@ -152,13 +149,11 @@ train:
 
 
 
-  pixel_criterion: l1
+  pixel_criterion: l2
 
-  pixel_weight: !!float 1e-2
+  feature_criterion: l2
 
-  feature_criterion: l1
-
-  feature_weight: 0
+  feature_weight: 1
 
 
 
@@ -167,29 +162,15 @@ train:
   val_freq: !!float 5e3
 
 
-  mmd_forw_kernels: [(0.2, 2), (1.5, 2), (3.0, 2)]
-
-  mmd_back_kernels: [(0.2, 0.1), (0.2, 0.5), (0.2, 2)]
-
   lambda_fit_forw: 16
-
-  lambda_mmd_forw: 1000.
-
-  lambda_mmd_back: 1000
 
   lambda_rec_back: 0.01
 
-  lambda_mle_forw: 1
+  lambda_mle_forw: 0
 
   gradient_clipping: 10
 
-  not_use_forw_mmd: True
-
-  not_use_back_mmd: True
-
   weight_decay_G: !!float 1e-5
-
-  use_learned_y: True
 
 
   lr_D: !!float 1e-4
@@ -200,9 +181,9 @@ train:
 
   beta2_D: 0.99
 
-  gan_type: ragan
+  gan_type: gan
 
-  gan_weight: !!float 1e-1
+  gan_weight: !!float 5e-3
 
   D_update_ratio: 1
   D_init_iters: 0

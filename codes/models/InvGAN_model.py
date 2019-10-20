@@ -7,14 +7,9 @@ from torch.nn.parallel import DataParallel, DistributedDataParallel
 import models.networks as networks
 import models.lr_scheduler as lr_scheduler
 from .base_model import BaseModel
-from models.modules.loss import *
+from models.modules.loss import GANLoss
 
 logger = logging.getLogger('base')
-
-class Config_MMD(object):
-    def __init__(self, device, mmd_kernels):
-        self.device = device
-        self.mmd_kernels = mmd_kernels
 
 class InvGANSRModel(BaseModel):
     def __init__(self, opt):
@@ -49,26 +44,6 @@ class InvGANSRModel(BaseModel):
             self.netD.train()
 
             # loss
-            mmd_forw_kernels = [(0.2, 2), (1.5, 2), (3.0, 2)]
-            mmd_back_kernels = [(0.2, 0.1), (0.2, 0.5), (0.2, 2)]
-            #config_mmd_forw = Config_MMD(self.device, train_opt['mmd_forw_kernels'])
-            #config_mmd_back = Config_MMD(self.device, train_opt['mmd_back_kernels'])
-            config_mmd_forw = Config_MMD(self.device, mmd_forw_kernels)
-            config_mmd_back = Config_MMD(self.device, mmd_back_kernels)
-
-            self.MMD_forward = MMDLoss(config_mmd_forw) 
-            self.MMD_backward = MMDLoss(config_mmd_back) 
-
-            #if self.train_opt['pixel_criterion']:
-            #    self.Reconstruction = ReconstructionLoss(losstype=self.train_opt['pixel_criterion'])
-            #else:
-            #    self.Reconstruction = ReconstructionLoss()
-            #if self.train_opt['pixel_criterion']:
-            #    self.Reconstruction_forw = ReconstructionLoss(losstype=self.train_opt['pixel_criterion'])
-            #    self.Reconstruction_back = ReconstructionLoss(losstype=self.train_opt['pixel_criterion'])
-            #else:
-            #    self.Reconstruction_forw = ReconstructionLoss(losstype=self.train_opt['pixel_criterion_forw'])
-            #    self.Reconstruction_back = ReconstructionLoss(losstype=self.train_opt['pixel_criterion_back'])
             if self.train_opt['pixel_criterion']:
                 if self.train_opt['pixel_critetion'] == 'l2':
                     self.Reconstruction_forw = nn.MSELoss().to(self.device)
@@ -87,16 +62,6 @@ class InvGANSRModel(BaseModel):
                     self.Reconstruction_back = nn.L1Loss().to(self.device)
 
             # feature loss
-            #if self.train_opt['feature_criterion']:
-            #    if self.train_opt['normalize_feature']:
-            #        self.Reconstructionf = FeatureNormalizeLoss(losstype=self.train_opt['feature_criterion'])
-            #    else:
-            #        self.Reconstructionf = ReconstructionLoss(losstype=self.train_opt['feature_criterion'])
-            #else:
-            #    if self.train_opt['normalize_feature']:
-            #        self.Reconstructionf = FeatureNormalizeLoss()
-            #    else:
-            #        self.Reconstructionf = ReconstructionLoss()
             if self.train_opt['feature_critetion'] == 'l2':
                 self.Reconstructionf = nn.MSELoss().to(self.device)
             else:
@@ -127,9 +92,9 @@ class InvGANSRModel(BaseModel):
             for k, v in self.netG.named_parameters():
                 if v.requires_grad:
                     optim_params.append(v)
-                #else:
-                #    if self.rank <= 0:
-                #        logger.waring('Params [{:s}] will not optimize.'.format(k))
+                else:
+                    if self.rank <= 0:
+                        logger.warning('Params [{:s}] will not optimize.'.format(k))
             self.optimizer_G = torch.optim.Adam(optim_params, lr=train_opt['lr_G'],
                                                 weight_decay=wd_G,
                                                 betas=(train_opt['beta1'], train_opt['beta2']))
@@ -170,39 +135,35 @@ class InvGANSRModel(BaseModel):
     def noise_batch(self, dims):
         return torch.randn(tuple(dims)).to(self.device)
 
-    def zeros_batch(self, dims):
-        return torch.zeros(tuple(dims)).to(self.device)
-
     def loss_forward(self, out, y):
-        output_block_grad = torch.cat((out[:, :3, :, :], out[:, 3:, :, :].data), dim=1)
-        y_short = torch.cat((y[:, :3, :, :], y[:, 3:, :, :]), dim=1)
+        l_forw_fit = self.train_opt['lambda_fit_forw'] * self.Reconstruction_forw(out[:, :3, :, :], y)
 
-        l_forw_fit = self.train_opt['lambda_fit_forw'] * self.Reconstruction_forw(out[:, :3, :, :], y[:, :3, :, :])
-        l_forw_mmd = self.train_opt['lambda_mmd_forw'] * torch.mean(self.MMD_forward(output_block_grad, y_short))
+        if self.train_opt['lambda_mle_forw']:
+            z = out[:, 3:, :, :].reshape([out.shape[0], -1])
+            l_forw_mle = self.train_opt['lambda_mle_forw'] * torch.sum(torch.norm(z, p=2, dim=1))
+        else:
+            l_forw_mle = 0
 
-        z = out[:, 3:, :, :].reshape([out.shape[0], -1])
-        l_forw_mle = self.train_opt['lambda_mle_forw'] * torch.sum(torch.norm(z, p=2, dim=1))
-
-        #print(l_forw_fit.item(), l_forw_mmd.item(), l_forw_mle.item())
-
-        return l_forw_fit, l_forw_mmd, l_forw_mle
+        return l_forw_fit, l_forw_mle
 
     def loss_backward(self, x, x_samples):
         x_samples_image = x_samples[:, :3, :, :]
-        MMD = self.MMD_backward(x, x_samples_image)
-        l_back_mmd = self.train_opt['lambda_mmd_back'] * torch.mean(MMD)
         l_back_rec = self.train_opt['lambda_rec_back'] * self.Reconstruction_back(x, x_samples_image)
-        if self.train_opt['padding_x']:
-            xx = x_samples[:, 3:, :, :].reshape([x_samples.shape[0], -1])
-            l_back_mle = self.train_opt['lambda_mle_back'] * torch.sum(torch.norm(xx, p=2, dim=1))
-        else:
-            l_back_mle = 0
 
-        #print(l_back_mmd.item(), l_back_rec.item())
+        # feature loss
+        if self.l_fea_w > 0:
+            l_back_fea = self.feature_loss(x, x_samples_image)
 
-        return l_back_mmd, l_back_rec, l_back_mle
+        # GAN loss
+        pred_g_fake = self.netD(x_samples_image)
+        if self.opt['train']['gan_type'] == 'gan':
+            l_back_gan = self.l_gan_w * self.cri_gan(pred_g_fake, True)
+        elif self.opt['train']['gan_type'] == 'ragan':
+            pred_d_real = self.netD(x).detach()
+            l_back_gan = self.l_gan_w * (self.cri_gan(pred_d_real - torch.mean(pred_g_fake), False) + self.cri_gan(pred_g_fake - torch.mean(pred_d_real), True)) / 2
 
-    #def loss_backward_rec(self, out_y, y, x):
+        return l_back_rec, l_back_fea, l_back_gan
+
     def feature_loss(self, real, fake):
         real_fea = self.netF(real).detach()
         fake_fea = self.netF(fake)
@@ -217,75 +178,23 @@ class InvGANSRModel(BaseModel):
             p.requires_grad = False
 
         self.optimizer_G.zero_grad()
-        if self.train_opt['padding_x']:
-            self.padding_x_dim = self.train_opt['padding_x']
-            padding_xshape = [self.real_H.shape[0], self.padding_x_dim, self.real_H.shape[2], self.real_H.shape[3]]
-            self.input = torch.cat((self.real_H, self.noise_batch(padding_xshape)), dim=1)
-        else:
-            self.input = self.real_H
+        self.input = self.real_H
 
-        if self.train_opt['use_jacobian']:
-            self.output, jacobian = self.netG(self.input, rev=False, cal_jacobian=True)
-            loss = -jacobian
-        else:
-            self.output = self.netG(self.input)
-            loss = 0
+        self.output = self.netG(self.input)
+        loss = 0
 
         zshape = self.output[:, 3:, :, :].shape
-        y = torch.cat((self.var_L, self.noise_batch(zshape)), dim=1)
-        #loss = self.loss_forward(self.output, y) + self.loss_backward(self.real_H, y)
 
-        if self.train_opt['use_learned_y']:
-            yy = torch.cat((self.output[:, :3, :, :], self.noise_batch(zshape)), dim=1)
-        else:
-            yy = y
+        yy = torch.cat((self.output[:, :3, :, :], self.noise_batch(zshape)), dim=1)
 
         self.fake_H = self.netG(yy, rev=True)
 
         if step % self.D_update_ratio == 0 and step > self.D_init_iters:
-            l_forw_fit, l_forw_mmd, l_forw_mle = self.loss_forward(self.output, y)
+            l_forw_fit, l_forw_mle = self.loss_forward(self.output, self.var_L)
 
-            if (self.train_opt['lambda_rec_back'] == 0.0 and self.train_opt['not_use_back_mmd']):
-                l_back_mmd, l_back_rec, l_back_mle = 0, 0
-            else:
-                l_back_mmd, l_back_rec, l_back_mle = self.loss_backward(self.real_H, self.fake_H)
-                if self.train_opt['learned_y_par']:
-                    self.fake_H_gtlr = self.netG(y, rev=True)
-                    _, l_back_rec_bicubic, l_back_mle_bicubic = self.loss_backward(self.real_H, self.fake_H_gtlr)
-                    l_back_rec = self.train_opt['learned_y_par'] * l_back_rec + (1 - self.train_opt['learned_y_par']) * l_back_rec_bicubic
-                    l_back_mle = self.train_opt['learned_y_par'] * l_back_mle + (1 - self.train_opt['learned_y_par']) * l_back_mle_bicubic
+            l_back_rec, l_back_fea, l_back_gan = self.loss_backward(self.real_H, self.fake_H)
 
-            if self.train_opt['use_stage']:
-                if step < self.train_opt['stage1_step']:
-                    l_back_rec = 0
-                    l_back_mle = 0
-
-            loss += l_forw_fit + l_back_rec + l_forw_mle + l_back_mle
-
-            if not self.train_opt['not_use_forw_mmd']:
-                loss += l_forw_mmd
-
-            if not self.train_opt['not_use_back_mmd']:
-                loss += l_back_mmd
-
-            # feature loss
-            if self.l_fea_w > 0:
-                l_fea = self.feature_loss(self.real_H, self.fake_H)
-                loss += l_fea
-
-            # GAN loss
-            pred_g_fake = self.netD(self.fake_H)
-            if self.opt['train']['gan_type'] == 'gan':
-                l_g_gan = self.l_gan_w * self.cri_gan(pred_g_fake, True)
-            elif self.opt['train']['gan_type'] == 'ragan':
-                pred_d_real = self.netD(self.var_ref).detach()
-                l_g_gan = self.l_gan_w * (self.cri_gan(pred_d_real - torch.mean(pred_g_fake), False) + self.cri_gan(pred_g_fake - torch.mean(pred_d_real), True)) / 2
-            loss += l_g_gan
-
-            #print(str(l_forw_fit.item()) + "  ||  " + str(l_back_rec.item()) + "  ||  " + str(l_forw_mle.item()) + "  ||  " + str(l_back_mle.item()) + "  ||  " + str(l_g_gan.item()))
-            print(str(l_forw_fit) + "  ||  " + str(l_back_rec) + "  ||  " + str(l_forw_mle) + "  ||  " + str(l_back_mle) + "  ||  " + str(l_g_gan) + " || " + str(l_fea))
-
-            #print(loss.item())
+            loss += l_forw_fit + l_forw_mle + l_back_rec + l_back_fea + l_back_gan
 
             loss.backward()
 
@@ -315,19 +224,17 @@ class InvGANSRModel(BaseModel):
         l_d_total.backward()
         self.optimizer_D.step()
 
-        ## set log
-        #self.log_dict['l_pix'] = l_pix.item()
+        # set log
+        self.log_dict['l_forw_fit'] = l_forw_fit.item()
+        self.log_dict['l_back_rec'] = l_back_rec.item()
+        self.log_dict['l_back_fea'] = l_back_fea.item()
+        self.log_dict['l_back_gan'] = l_back_gan.item()
+        self.log_dict['l_d'] = l_d_total.item()
 
     def test(self):
         Lshape = self.var_L.shape
-        if self.train_opt and self.train_opt['padding_x']:
-            self.padding_x_dim = self.train_opt['padding_x']
-            padding_xshape = [self.real_H.shape[0], self.padding_x_dim, self.real_H.shape[2], self.real_H.shape[3]]
-            self.input = torch.cat((self.real_H, self.noise_batch(padding_xshape)), dim=1)
-            input_dim = self.padding_x_dim + Lshape[1]
-        else:
-            input_dim = Lshape[1]
-            self.input = self.real_H
+        input_dim = Lshape[1]
+        self.input = self.real_H
 
         zshape = [Lshape[0], input_dim * (self.opt['scale']**2) - Lshape[1], Lshape[2], Lshape[3]]
 
@@ -335,55 +242,16 @@ class InvGANSRModel(BaseModel):
 
         if self.test_opt and self.test_opt['noise_scale']:
             noise_scale = self.test_opt['noise_scale']
-        y = torch.cat((self.var_L, noise_scale * self.noise_batch(zshape)), dim=1)
 
         self.netG.eval()
         with torch.no_grad():
-            self.fake_H = self.netG(y, rev=True)[:, :3, :, :]
-            
             self.forw_L = self.netG(self.input)[:, :3, :, :]
 
         y_forw = torch.cat((self.forw_L, noise_scale * self.noise_batch(zshape)), dim=1)
         with torch.no_grad():
-            self.fake_H_forw = self.netG(y_forw, rev=True)[:, :3, :, :]
+            self.fake_H = self.netG(y_forw, rev=True)[:, :3, :, :]
 
         self.netG.train()
-
-    #def test_x8(self):
-    #    # from https://github.com/thstkdgus35/EDSR-PyTorch
-    #    self.netG.eval()
-
-    #    def _transform(v, op):
-    #        # if self.precision != 'single': v = v.float()
-    #        v2np = v.data.cpu().numpy()
-    #        if op == 'v':
-    #            tfnp = v2np[:, :, :, ::-1].copy()
-    #        elif op == 'h':
-    #            tfnp = v2np[:, :, ::-1, :].copy()
-    #        elif op == 't':
-    #            tfnp = v2np.transpose((0, 1, 3, 2)).copy()
-
-    #        ret = torch.Tensor(tfnp).to(self.device)
-    #        # if self.precision == 'half': ret = ret.half()
-
-    #        return ret
-
-    #    lr_list = [self.var_L]
-    #    for tf in 'v', 'h', 't':
-    #        lr_list.extend([_transform(t, tf) for t in lr_list])
-    #    with torch.no_grad():
-    #        sr_list = [self.netG(aug) for aug in lr_list]
-    #    for i in range(len(sr_list)):
-    #        if i > 3:
-    #            sr_list[i] = _transform(sr_list[i], 't')
-    #        if i % 4 > 1:
-    #            sr_list[i] = _transform(sr_list[i], 'h')
-    #        if (i % 4) % 2 == 1:
-    #            sr_list[i] = _transform(sr_list[i], 'v')
-
-    #    output_cat = torch.cat(sr_list, dim=0)
-    #    self.fake_H = output_cat.mean(dim=0, keepdim=True)
-    #    self.netG.train()
 
     def get_current_log(self):
         return self.log_dict
@@ -393,7 +261,6 @@ class InvGANSRModel(BaseModel):
         out_dict['LQ'] = self.var_L.detach()[0].float().cpu()
         out_dict['SR'] = self.fake_H.detach()[0].float().cpu()
         out_dict['LR'] = self.forw_L.detach()[0].float().cpu()
-        out_dict['SR_forw'] = self.fake_H_forw.detach()[0].float().cpu()
         if need_GT:
             out_dict['GT'] = self.real_H.detach()[0].float().cpu()
         return out_dict

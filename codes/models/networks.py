@@ -1,9 +1,6 @@
 import torch
 import logging
-import models.modules.SRResNet_arch as SRResNet_arch
 import models.modules.discriminator_vgg_arch as SRGAN_arch
-import models.modules.RRDBNet_arch as RRDBNet_arch
-from models.modules.InvSimpleNet_arch import *
 from models.modules.Inv_arch import *
 from models.modules.Subnet_constructor import subnet
 import math
@@ -13,50 +10,19 @@ logger = logging.getLogger('base')
 ####################
 # define network
 ####################
-#### Generator
 def define_G(opt):
     opt_net = opt['network_G']
     which_model = opt_net['which_model_G']
+    block_type = which_model['block_type']
+    subnet_type = which_model['subnet_type']
     if opt_net['init']:
         init = opt_net['init']
     else:
-        init = 'kaiming'
+        init = 'xavier'
 
-	#if which_model == 'MSRResNet':
-	#    netG = SRResNet_arch.MSRResNet(in_nc=opt_net['in_nc'], out_nc=opt_net['out_nc'],
-	#                                   nf=opt_net['nf'], nb=opt_net['nb'], upscale=opt_net['scale'])
-	#elif which_model == 'RRDBNet':
-	#    netG = RRDBNet_arch.RRDBNet(in_nc=opt_net['in_nc'], out_nc=opt_net['out_nc'],
-	#                                nf=opt_net['nf'], nb=opt_net['nb'])
-    # elif which_model == 'sft_arch':  # SFT-GAN
-    #     netG = sft_arch.SFT_Net()
-    if which_model == 'InvSimpleNet':
-        upscale_log = int(math.log(opt_net['scale'], 2))
-        #netG = InvSimpleNet(opt_net['in_nc'], opt_net['out_nc'], opt_net['block_num'], upscale_log)
-        netG = InvSRNet(opt_net['in_nc'], opt_net['out_nc'], subnet('SimpleNet', init), opt_net['block_num'], upscale_log)
-    elif which_model == 'InvExpSimpleNet':
-        upscale_log = int(math.log(opt_net['scale'], 2))
-        netG = InvExpSRNet(opt_net['in_nc'], opt_net['out_nc'], subnet('SimpleNet', init), opt_net['block_num'], upscale_log)
-    elif which_model == 'InvExpTHNet':
-        upscale_log = int(math.log(opt_net['scale'], 2))
-        netG = InvExpSRNet(opt_net['in_nc'], opt_net['out_nc'], subnet('THNet', init), opt_net['block_num'], upscale_log)
-    elif which_model == 'InvSigmoidSimpleNet':
-        upscale_log = int(math.log(opt_net['scale'], 2))
-        netG = InvSigmoidSRNet(opt_net['in_nc'], opt_net['out_nc'], subnet('SimpleNet', init), opt_net['block_num'], upscale_log)
-    elif which_model == 'InvExpSigmoidSimpleNet':
-        upscale_log = int(math.log(opt_net['scale'], 2))
-        netG = InvExpSigmoidSRNet(opt_net['in_nc'], opt_net['out_nc'], subnet('SimpleNet', init), opt_net['block_num'], upscale_log)
-    elif which_model == 'InvExpSigmoid2SimpleNet':
-        upscale_log = int(math.log(opt_net['scale'], 2))
-        netG = InvExpSigmoid2SRNet(opt_net['in_nc'], opt_net['out_nc'], subnet('SimpleNet', init), opt_net['block_num'], upscale_log)
-    elif which_model == 'InvExpSigmoidRRDBNet':
-        upscale_log = int(math.log(opt_net['scale'], 2))
-        netG = InvExpSigmoidSRNet(opt_net['in_nc'], opt_net['out_nc'], subnet('RRDBNet', init), opt_net['block_num'], upscale_log)
-    elif which_model == 'InvDBNet':
-        upscale_log = int(math.log(opt_net['scale'], 2))
-        netG = InvExpSigmoidSRNet(opt_net['in_nc'], opt_net['out_nc'], subnet('DBNet', init), opt_net['block_num'], upscale_log)
-    else:
-        raise NotImplementedError('Generator model [{:s}] not recognized'.format(which_model))
+    upscale_log = int(math.log(opt_net['scale'], 2))
+    netG = InvSRNet(block_type, opt_net['in_nc'], opt_net['out_nc'], subnet(subnet_type, init), opt_net['block_num'], upscale_log)
+
     return netG
 
 

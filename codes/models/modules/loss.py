@@ -2,40 +2,6 @@ import torch
 import torch.nn as nn
 import numpy as np
 
-class MMDLoss(nn.Module):
-    def __init__(self, config):
-        super(MMDLoss, self).__init__()
-        self.c = config
-
-    def MMD_matrix_multiscale(self, x, y, width_exponents):
-        x = x.reshape([x.shape[0], -1])
-        y = y.reshape([y.shape[0], -1])
-        xx, yy, xy = torch.mm(x, x.t()), torch.mm(y, y.t()), torch.mm(x, y.t())
-
-        rx = (xx.diag().unsqueeze(0).expand_as(xx))
-        ry = (yy.diag().unsqueeze(0).expand_as(yy))
-
-        dxx = torch.clamp(rx.t() + rx - 2 * xx, 0, np.inf)
-        dyy = torch.clamp(ry.t() + ry - 2 * yy, 0, np.inf)
-        dxy = torch.clamp(rx.t() + ry - 2 * xy, 0, np.inf)
-
-        XX, YY, XY = (torch.zeros(xx.shape).to(self.c.device), torch.zeros(yy.shape).to(self.c.device), torch.zeros(xy.shape).to(self.c.device))
-
-        for C, a in width_exponents:
-            XX += C**a * ((C + dxx) / a)**-a
-            YY += C**a * ((C + dyy) / a)**-a
-            XY += C**a * ((C + dxy) / a)**-a
-
-        #print(XX)
-        #print(YY)
-        #print(XY)
-        #print(XX+YY-2*XY)
-
-        return XX + YY - 2 * XY
-
-    def forward(self, x0, x1):
-        return self.MMD_matrix_multiscale(x0, x1, self.c.mmd_kernels)
-
 class ReconstructionLoss(nn.Module):
     def __init__(self, losstype='l2', eps=1e-6):
         super(ReconstructionLoss, self).__init__()
@@ -51,36 +17,6 @@ class ReconstructionLoss(nn.Module):
         else:
             print("reconstruction loss type error!")
             return 0
-
-class FeatureNormalizeLoss(nn.Module):
-    def __init__(self, losstype='l2', eps=1e-6):
-        super(FeatureNormalizeLoss, self).__init__()
-        self.losstype = losstype
-        self.eps = eps
-
-    def forward(self, x, target):
-        # normalize column
-        norm_x = x.norm(2, dim=1, keepdim=True)
-        x = x / norm_x
-        norm_t = target.norm(2, dim=1, keepdim=True)
-        target = target / norm_t
-
-        if self.losstype == 'l2':
-            return torch.mean(torch.sum((x - target)**2, (1, 2, 3)))
-        elif self.losstype == 'l1':
-            diff = x - target
-            return torch.mean(torch.sum(torch.sqrt(diff * diff + self.eps), (1, 2, 3)))
-        else:
-            print("reconstruction loss type error!")
-            return 0
-
-def l2_dist_matrix(x, y):
-    xx, yy, xy = torch.mm(x, x.t()), torch.mm(y, y.t()), torch.mm(x, y.t())
-
-    rx = (xx.diag().unsqueeze(0).expand_as(xx))
-    ry = (yy.diag().unsqueeze(0).expand_as(yy))
-
-    return torch.clamp(rx.t() + ry - 2 * xy, 0, np.inf)
 
 
 class CharbonnierLoss(nn.Module):
