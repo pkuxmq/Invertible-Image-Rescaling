@@ -58,9 +58,9 @@ class THNetBlock(nn.Module):
     def forward(self, x):
         return self.body(x)
 
-class RRDBNetBlock(nn.Module):
+class DenseBlock(nn.Module):
     def __init__(self, channel_in, channel_out, init='kaiming', gc=32, bias=True):
-        super(RRDBNetBlock, self).__init__()
+        super(DenseBlock, self).__init__()
         self.conv1 = nn.Conv2d(channel_in, gc, 3, 1, 1, bias=bias)
         self.conv2 = nn.Conv2d(channel_in + gc, gc, 3, 1, 1, bias=bias)
         self.conv3 = nn.Conv2d(channel_in + 2 * gc, gc, 3, 1, 1, bias=bias)
@@ -96,11 +96,11 @@ def subnet(net_structure, init='kaiming'):
                 return THNetBlock(channel_in, channel_out, init)
             else:
                 return THNetBlock(channel_in, channel_out)
-        elif net_structure == 'RRDBNet':
+        elif net_structure == 'DBNet':
             if init == 'xavier':
-                return RRDBNetBlock(channel_in, channel_out, init)
+                return DenseBlock(channel_in, channel_out, init)
             else:
-                return RRDBNetBlock(channel_in, channel_out)
+                return DenseBlock(channel_in, channel_out)
         else:
             return None
 
