@@ -153,6 +153,8 @@ class InvGANSRModel(BaseModel):
         # feature loss
         if self.l_fea_w > 0:
             l_back_fea = self.feature_loss(x, x_samples_image)
+        else:
+            l_back_fea = torch.tensor(0)
 
         # GAN loss
         pred_g_fake = self.netD(x_samples_image)
