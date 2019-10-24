@@ -274,11 +274,12 @@ class InvGANbiSRModel(BaseModel):
         self.optimizer_D_forw.step()
 
         # set log
-        self.log_dict['l_forw_fit'] = l_forw_fit.item()
-        self.log_dict['l_forw_gan'] = l_forw_gan.item()
-        self.log_dict['l_back_rec'] = l_back_rec.item()
-        self.log_dict['l_back_fea'] = l_back_fea.item()
-        self.log_dict['l_back_gan'] = l_back_gan.item()
+        if step % self.D_update_ratio == 0 and step > self.D_init_iters:
+            self.log_dict['l_forw_fit'] = l_forw_fit.item()
+            self.log_dict['l_forw_gan'] = l_forw_gan.item()
+            self.log_dict['l_back_rec'] = l_back_rec.item()
+            self.log_dict['l_back_fea'] = l_back_fea.item()
+            self.log_dict['l_back_gan'] = l_back_gan.item()
         self.log_dict['l_d_back'] = l_d_total.item()
         self.log_dict['l_d_forw'] = l_d_forw_total.item()
 

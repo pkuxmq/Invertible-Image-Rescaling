@@ -61,6 +61,9 @@ for test_loader in test_loaders:
         visuals = model.get_current_visuals(need_GT=need_GT)
 
         sr_img = util.tensor2img(visuals['SR'])  # uint8
+        srgt_img = util.tensor2img(visuals['GT'])  # uint8
+        lr_img = util.tensor2img(visuals['LR'])  # uint8
+        lrgt_img = util.tensor2img(visuals['LQ'])  # uint8
 
         # save images
         suffix = opt['suffix']
@@ -69,6 +72,24 @@ for test_loader in test_loaders:
         else:
             save_img_path = osp.join(dataset_dir, img_name + '.png')
         util.save_img(sr_img, save_img_path)
+
+        if suffix:
+            save_img_path = osp.join(dataset_dir, img_name + suffix + '_GT.png')
+        else:
+            save_img_path = osp.join(dataset_dir, img_name + '_GT.png')
+        util.save_img(srgt_img, save_img_path)
+
+        if suffix:
+            save_img_path = osp.join(dataset_dir, img_name + suffix + '_LR.png')
+        else:
+            save_img_path = osp.join(dataset_dir, img_name + '_LR.png')
+        util.save_img(lr_img, save_img_path)
+
+        if suffix:
+            save_img_path = osp.join(dataset_dir, img_name + suffix + '_LRGT.png')
+        else:
+            save_img_path = osp.join(dataset_dir, img_name + '_LRGT.png')
+        util.save_img(lrgt_img, save_img_path)
 
         # calculate PSNR and SSIM
         if need_GT:
