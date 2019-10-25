@@ -71,7 +71,8 @@ def read_img(env, path, size=None):
     '''read image by cv2 or from lmdb
     return: Numpy float32, HWC, BGR, [0,1]'''
     if env is None:  # img
-        img = cv2.imread(path, cv2.IMREAD_UNCHANGED)
+        #img = cv2.imread(path, cv2.IMREAD_UNCHANGED)
+        img = cv2.imread(path, cv2.IMREAD_COLOR)
     else:
         img = _read_img_lmdb(env, path, size)
     img = img.astype(np.float32) / 255.
