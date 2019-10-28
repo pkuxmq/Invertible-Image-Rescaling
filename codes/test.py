@@ -4,6 +4,7 @@ import time
 import argparse
 from collections import OrderedDict
 
+import numpy as np
 import options.options as option
 import utils.util as util
 from data.util import bgr2ycbcr
@@ -46,10 +47,10 @@ for test_loader in test_loaders:
     test_results['psnr_y'] = []
     test_results['ssim_y'] = []
 
-    test_results['psnr_forw'] = []
-    test_results['ssim_forw'] = []
-    test_results['psnr_y_forw'] = []
-    test_results['ssim_y_forw'] = []
+    test_results['psnr_lr'] = []
+    test_results['ssim_lr'] = []
+    test_results['psnr_y_lr'] = []
+    test_results['ssim_y_lr'] = []
 
     for data in test_loader:
         need_GT = False if test_loader.dataset.opt['dataroot_GT'] is None else True
@@ -97,6 +98,9 @@ for test_loader in test_loaders:
             gt_img = gt_img / 255.
             sr_img = sr_img / 255.
 
+            lr_img = lr_img / 255.
+            lrgt_img = lrgt_img / 255.
+
             crop_border = opt['crop_border'] if opt['crop_border'] else opt['scale']
             if crop_border == 0:
                 cropped_sr_img = sr_img
@@ -109,6 +113,12 @@ for test_loader in test_loaders:
             ssim = util.calculate_ssim(cropped_sr_img * 255, cropped_gt_img * 255)
             test_results['psnr'].append(psnr)
             test_results['ssim'].append(ssim)
+
+            # PSNR and SSIM for LR
+            psnr_lr = util.calculate_psnr(lr_img * 255, lrgt_img * 255)
+            ssim_lr = util.calculate_ssim(lr_img * 255, lrgt_img * 255)
+            test_results['psnr_lr'].append(psnr_lr)
+            test_results['ssim_lr'].append(ssim_lr)
 
             if gt_img.shape[2] == 3:  # RGB image
                 sr_img_y = bgr2ycbcr(sr_img, only_y=True)
@@ -123,11 +133,19 @@ for test_loader in test_loaders:
                 ssim_y = util.calculate_ssim(cropped_sr_img_y * 255, cropped_gt_img_y * 255)
                 test_results['psnr_y'].append(psnr_y)
                 test_results['ssim_y'].append(ssim_y)
+
+                lr_img_y = bgr2ycbcr(lr_img, only_y=True)
+                lrgt_img_y = bgr2ycbcr(lrgt_img, only_y=True)
+                psnr_y_lr = util.calculate_psnr(lr_img_y * 255, lrgt_img_y * 255)
+                ssim_y_lr = util.calculate_ssim(lr_img_y * 255, lrgt_img_y * 255)
+                test_results['psnr_y_lr'].append(psnr_y_lr)
+                test_results['ssim_y_lr'].append(ssim_y_lr)
+
                 logger.info(
-                    '{:20s} - PSNR: {:.6f} dB; SSIM: {:.6f}; PSNR_Y: {:.6f} dB; SSIM_Y: {:.6f}.'.
-                    format(img_name, psnr, ssim, psnr_y, ssim_y))
+                        '{:20s} - PSNR: {:.6f} dB; SSIM: {:.6f}; PSNR_Y: {:.6f} dB; SSIM_Y: {:.6f}. LR PSNR: {:.6f} dB; SSIM: {:.6f}; PSNR_Y: {:.6f} dB; SSIM_Y: {:.6f}.'.
+                    format(img_name, psnr, ssim, psnr_y, ssim_y, psnr_lr, ssim_lr, psnr_y_lr, ssim_y_lr))
             else:
-                logger.info('{:20s} - PSNR: {:.6f} dB; SSIM: {:.6f}.'.format(img_name, psnr, ssim))
+                logger.info('{:20s} - PSNR: {:.6f} dB; SSIM: {:.6f}. LR PSNR: {:.6f} dB; SSIM: {:.6f}.'.format(img_name, psnr, ssim, psnr_lr, ssim_lr))
         else:
             logger.info(img_name)
 
@@ -135,12 +153,19 @@ for test_loader in test_loaders:
         # Average PSNR/SSIM results
         ave_psnr = sum(test_results['psnr']) / len(test_results['psnr'])
         ave_ssim = sum(test_results['ssim']) / len(test_results['ssim'])
+
+        ave_psnr_lr = sum(test_results['psnr_lr']) / len(test_results['psnr_lr'])
+        ave_ssim_lr = sum(test_results['ssim_lr']) / len(test_results['ssim_lr'])
+
         logger.info(
-            '----Average PSNR/SSIM results for {}----\n\tpsnr: {:.6f} db; ssim: {:.6f}\n'.format(
-                test_set_name, ave_psnr, ave_ssim))
+                '----Average PSNR/SSIM results for {}----\n\tpsnr: {:.6f} db; ssim: {:.6f}. LR psnr: {:.6f} db; ssim: {:.6f}.\n'.format(
+                test_set_name, ave_psnr, ave_ssim, ave_psnr_lr, ave_ssim_lr))
         if test_results['psnr_y'] and test_results['ssim_y']:
             ave_psnr_y = sum(test_results['psnr_y']) / len(test_results['psnr_y'])
             ave_ssim_y = sum(test_results['ssim_y']) / len(test_results['ssim_y'])
+
+            ave_psnr_y_lr = sum(test_results['psnr_y_lr']) / len(test_results['psnr_y_lr'])
+            ave_ssim_y_lr = sum(test_results['ssim_y_lr']) / len(test_results['ssim_y_lr'])
             logger.info(
-                '----Y channel, average PSNR/SSIM----\n\tPSNR_Y: {:.6f} dB; SSIM_Y: {:.6f}\n'.
-                format(ave_psnr_y, ave_ssim_y))
+                '----Y channel, average PSNR/SSIM----\n\tPSNR_Y: {:.6f} dB; SSIM_Y: {:.6f}. LR PSNR_Y: {:.6f} dB; SSIM_Y: {:.6f}.\n'.
+                format(ave_psnr_y, ave_ssim_y, ave_psnr_y_lr, ave_ssim_y_lr))

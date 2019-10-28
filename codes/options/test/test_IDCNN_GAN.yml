@@ -1,6 +1,6 @@
-name: IDCNN_GAN_x4
+name: IDCNN_GAN_1_x4
 suffix: ~  # add suffix to saved images
-model: inv-sr
+model: invgan-sr
 distortion: sr
 scale: 4
 crop_border: ~  # crop border when evaluation. If None(~), crop the scale pixels
@@ -61,4 +61,4 @@ network_G:
 #### path
 path:
     #pretrain_model_G: ../experiments/pretrained_models/RRDB_ESRGAN_x4.pth
-  pretrain_model_G: /home/mingqing/InvSR/experiments/01_IDCNN_GAN_DB_l2_ratio10_x4_scratch_DIV2K/models/10000_G.pth
+  pretrain_model_G: /home/mingqing/InvSR/experiments/pretrained_models/295000_G.pth
