@@ -57,6 +57,68 @@ class DenseBlock(nn.Module):
         return x5
 
 
+class CALayer(nn.Module):
+    def __init__(self, channel, reduction=3):
+        super(CALayer, self).__init__()
+        # gloval acerage pooling: feature --> point
+        self.avg_pool = nn.AdaptiveAvgPool2d(1)
+        # feature channel downscale and upscale --> channel weight
+        self.conv_du = nn.Sequential(
+                nn.Conv2d(channel, channel // reduction, 1, padding=0, bias=True),
+                nn.ReLU(inplace=True),
+                nn.Conv2d(channel // reduction, channel, 1, padding=0, bias=True),
+                nn.Sigmoid()
+        )
+
+    def forward(self, x):
+        y = self.avg_pool(x)
+        y = self.conv_du(y)
+
+        return x * y
+
+class ChannelAttentionBlock(nn.Module):
+    def __init__(self, channel_in, channel_out, init='xavier', kernel_size=3, reduction=3, bias=True, bn=False, act=nn.ReLU(True)):
+        super(ChannelAttentionBlock, self).__init__()
+        modules_body = []
+
+        self.conv1 = nn.Conv2d(channel_in, channel_in, kernel_size, 1, 1, bias=bias)
+        modules_body.append(self.conv1)
+        if bn: modules_body.append(nn.BatchNorm2d(channel_in))
+        modules_body.append(act)
+
+        self.conv2 = nn.Conv2d(channel_in, channel_out, kernel_size, 1, 1, bias=bias)
+        modules_body.append(self.conv2)
+        if bn: modules_body.append(nn.BatchNorm2d(channel_out))
+
+        self.calayer = CALayer(channel_out, reduction)
+        modules_body.append(self.calayer)
+
+        self.body = nn.Sequential(*modules_body)
+
+        if init == 'xavier':
+            mutil.initialize_weights_xavier([self.conv1, self.calayer], 0.1)
+        else:
+            mutil.initialize_weights([self.conv1, self.calayer], 0.1)
+        mutil.initialize_weights(self.conv2, 0)
+
+    def forward(self, x):
+        return self.body(x)
+
+class CABlocks(nn.Module):
+    def __init__(self, channel_in, channel_out, init='xavier', kernel_size=3, reduction=3, bias=True, bn=False, act=nn.ReLU(True)):
+        super(CABlocks, self).__init__()
+        self.CABlock1 = ChannelAttentionBlock(channel_in, channel_in, init, kernel_size, reduction, bias, bn, act)
+        self.CABlock2 = ChannelAttentionBlock(channel_in, channel_in, init, kernel_size, reduction, bias, bn, act)
+        self.CABlock3 = ChannelAttentionBlock(channel_in, channel_out, init, kernel_size, reduction, bias, bn, act)
+
+    def forward(self, x):
+        out = self.CABlock1(x)
+        out = self.CABlock2(out)
+        out = self.CABlock3(out)
+
+        return out
+
+
 def subnet(net_structure, init='kaiming'):
     def constructor(channel_in, channel_out):
         if net_structure == 'SimpleNet':
@@ -69,6 +131,11 @@ def subnet(net_structure, init='kaiming'):
                 return DenseBlock(channel_in, channel_out, init)
             else:
                 return DenseBlock(channel_in, channel_out)
+        elif net_structure == 'CABNet':
+            if init == 'xavier':
+                return CABlocks(channel_in, channel_out, init)
+            else:
+                return CABlocks(channel_in, channel_out)
         else:
             return None
 

@@ -229,3 +229,101 @@ class InvSRNet(nn.Module):
             return out, jacobian
         else:
             return out
+
+
+class InvHSRNet(nn.Module):
+    def __init__(self, block_type, channel_in=3, channel_out=3, subnet_constructor=None, block_num=[], upscale_log=2, shuffle_stage1=False):
+        super(InvHSRNet, self).__init__()
+        self.upscale_log = upscale_log
+
+        operations = []
+
+        #channel_split_num1 = channel_in // 2
+        #for i in range(block_num[0]):
+        #    if block_type == 'InvBlock':
+        #        b = InvBlock(subnet_constructor, channel_in, channel_split_num1)
+        #    elif block_type == 'InvBlockExp':
+        #        b = InvBlockExp(subnet_constructor, channel_in, channel_split_num1)
+        #    elif block_type == 'InvBlockExp2':
+        #        b = InvBlockExp2(subnet_constructor, channel_in, channel_split_num1)
+        #    else:
+        #        print("Error! Undefined block type!")
+        #        exit(1)
+        #    operations.append(b)
+        #    if shuffle_stage1:
+        #        if i != block_num[0] - 1 or block_num[0] % 2 == 0:
+        #            if i % 2 == 0:
+        #                operations.append(ShuffleChannel(channel_in, channel_split_num1))
+        #            else:
+        #                operations.append(ShuffleChannel(channel_in, channel_in - channel_split_num1))
+
+        current_channel = channel_in
+        for i in range(upscale_log):
+            b = HaarDownsampling(current_channel)
+            operations.append(b)
+            current_channel *= 4
+            for j in range(block_num[i]):
+                if block_type == 'InvBlock':
+                    b = InvBlock(subnet_constructor, current_channel, channel_out)
+                elif block_type == 'InvBlockExp':
+                    b = InvBlockExp(subnet_constructor, current_channel, channel_out)
+                elif block_type == 'InvBlockExp2':
+                    b = InvBlockExp2(subnet_constructor, current_channel, channel_out)
+                else:
+                    print("Error! Undefined block type!")
+                    exit(1)
+                operations.append(b)
+            current_channel = channel_in
+
+        self.operations = nn.ModuleList(operations)
+
+        self.block_num = block_num
+        self.upscale_log = upscale_log
+
+    # if rev, x contains latent z1, z2 ... zn, LR, output contains LR_n-1, ..., LR1, HR
+    # else x contains HR, output contains [LR1, z1], [LR2, z2], ... [LR, zn]
+    # if multi_reconstruction (rev), x contains z1, z2, ..., zn, [LR1, ..., LR_n-1, LR], output contains LR_n-1, ..., LR1, [HR, HR(by LR_n-1), ...]
+    def forward(self, x, rev=False, multi_reconstruction=False):
+        xx = x[-1]
+        out = []
+
+        if not rev:
+            scnt = 0
+            for cnt in range(self.upscale_log):
+                bcnt = self.block_num[cnt] + 1
+                for i in range(bcnt):
+                    xx = self.operations[scnt + i].forward(xx, rev)
+                out.append(xx)
+                xx = xx[:, :3, :, :]
+                scnt += bcnt
+        else:
+            if not multi_reconstruction:
+                scnt = len(self.operations) - (self.block_num[-1] + 1)
+                for cnt in reversed(range(self.upscale_log)):
+                    bcnt = self.block_num[cnt] + 1
+                    xx = torch.cat((xx, x[cnt]), 1)
+                    for i in reversed(range(bcnt)):
+                        xx = self.operations[scnt + i].forward(xx, rev)
+                    out.append(xx)
+                    scnt -= bcnt
+                out.append(xx)
+            else:
+                HR_set = []
+                LRs = xx
+                sscnt = len(self.operations) - (self.block_num[-1] + 1)
+                for LR_start in reversed(range(self.upscale_log)):
+                    xx = LRs[LR_start]
+                    scnt = sscnt
+                    for cnt in reversed(range(LR_start + 1)):
+                        bcnt = self.block_num[cnt] + 1
+                        xx = torch.cat((xx, x[cnt]), 1)
+                        for i in reversed(range(bcnt)):
+                            xx = self.operations[scnt + i].forward(xx, rev)
+                        if LR_start == self.upscale_log - 1:
+                            out.append(xx)
+                        scnt -= bcnt
+                    HR_set.append(xx)
+                    sscnt -= self.block_num[LR_start] + 1
+                out.append(HR_set)
+
+        return out

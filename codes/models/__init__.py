@@ -7,6 +7,8 @@ def create_model(opt):
 
     if model == 'inv-sr':
         from .Inv_model import InvSRModel as M
+    elif model == 'inv-hsr':
+        from .InvH_model import InvHSRModel as M
     elif model == 'invgan-sr':
         from .InvGAN_model import InvGANSRModel as M
     elif model == 'invganbi-sr':

@@ -13,6 +13,7 @@ logger = logging.getLogger('base')
 def define_G(opt):
     opt_net = opt['network_G']
     which_model = opt_net['which_model_G']
+    net_type = which_model['net_type']
     block_type = which_model['block_type']
     subnet_type = which_model['subnet_type']
     if opt_net['init']:
@@ -21,7 +22,11 @@ def define_G(opt):
         init = 'xavier'
 
     upscale_log = int(math.log(opt_net['scale'], 2))
-    netG = InvSRNet(block_type, opt_net['in_nc'], opt_net['out_nc'], subnet(subnet_type, init), opt_net['block_num'], upscale_log)
+
+    if net_type and net_type == 'InvHSR':
+        netG = InvHSRNet(block_type, opt_net['in_nc'], opt_net['out_nc'], subnet(subnet_type, init), opt_net['block_num'], upscale_log)
+    else:
+        netG = InvSRNet(block_type, opt_net['in_nc'], opt_net['out_nc'], subnet(subnet_type, init), opt_net['block_num'], upscale_log)
 
     return netG
 
