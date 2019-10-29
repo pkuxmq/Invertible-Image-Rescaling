@@ -1,0 +1,56 @@
+name: 0_InvbiGANSR_learnedy_block16_x4_l1l2_30000
+suffix: ~  # add suffix to saved images
+model: invganbi-sr
+distortion: sr
+scale: 4
+crop_border: ~  # crop border when evaluation. If None(~), crop the scale pixels
+gpu_ids: [3]
+
+datasets:
+  #test_1:  # the 1st test dataset
+  #  name: set5
+  #  mode: LQGT
+  #  dataroot_GT: /mnt/SSD/xtwang/BasicSR_datasets/val_set5/Set5
+  #  dataroot_LQ: /mnt/SSD/xtwang/BasicSR_datasets/val_set5/Set5_bicLRx4
+  #test_2:  # the 2st test dataset
+  #  name: set14
+  #  mode: LQGT
+  #  dataroot_GT: /mnt/SSD/xtwang/BasicSR_datasets/val_set14/Set14
+  #  dataroot_LQ: /mnt/SSD/xtwang/BasicSR_datasets/val_set14/Set14_bicLRx4
+  val:
+
+    name: val_DIV2K
+
+    mode: LQGT
+
+    dataroot_GT: /home/shuxin/data/DIV2K/DIV2K_valid_HR.lmdb
+
+    dataroot_LQ: /home/shuxin/data/DIV2K/DIV2K_valid_LR_bicubic/X4.lmdb
+
+#### network structures
+#network_G:
+#  which_model_G: RRDBNet
+#  in_nc: 3
+#  out_nc: 3
+#  nf: 64
+#  nb: 23
+#  upscale: 4
+
+network_G:
+
+  which_model_G: InvExpSigmoidRRDBNet
+
+  in_nc: 3
+
+  out_nc: 3
+
+  block_num: [0, 8, 8]
+
+  scale: 4
+
+  init: xavier
+
+#### path
+path:
+    #pretrain_model_G: ../experiments/pretrained_models/RRDB_ESRGAN_x4.pth
+  pretrain_model_G: /home/mingqing/InvSR/experiments/000_InvbiGANFeatureExpSigmoidRRDBNetInitXavier_wd_nommd_mle_learnedy_block16_l1l2_x4_scratch_DIV2K/models/30000_G.pth
