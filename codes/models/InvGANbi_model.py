@@ -204,7 +204,7 @@ class InvGANbiSRModel(BaseModel):
         self.optimizer_G.zero_grad()
         self.input = self.real_H
 
-        self.output = self.netG(self.input)
+        self.output = self.netG(x=self.input)
         loss = 0
 
         zshape = self.output[:, 3:, :, :].shape
@@ -212,7 +212,7 @@ class InvGANbiSRModel(BaseModel):
         y = torch.cat((self.var_L, self.noise_batch(zshape)), dim=1)
         yy = torch.cat((self.output[:, :3, :, :], self.noise_batch(zshape)), dim=1)
 
-        self.fake_H = self.netG(yy, rev=True)
+        self.fake_H = self.netG(x=yy, rev=True)
 
         if step % self.D_update_ratio == 0 and step > self.D_init_iters:
             # forward loss
@@ -297,11 +297,11 @@ class InvGANbiSRModel(BaseModel):
 
         self.netG.eval()
         with torch.no_grad():
-            self.forw_L = self.netG(self.input)[:, :3, :, :]
+            self.forw_L = self.netG(x=self.input)[:, :3, :, :]
 
         y_forw = torch.cat((self.forw_L, noise_scale * self.noise_batch(zshape)), dim=1)
         with torch.no_grad():
-            self.fake_H = self.netG(y_forw, rev=True)[:, :3, :, :]
+            self.fake_H = self.netG(x=y_forw, rev=True)[:, :3, :, :]
 
         self.netG.train()
 
