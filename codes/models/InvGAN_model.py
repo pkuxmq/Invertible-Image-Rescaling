@@ -289,7 +289,7 @@ class InvGANSRModel(BaseModel):
     def load(self):
         load_path_G = self.opt['path']['pretrain_model_G']
         load_path_G2 = self.opt['path']['pretrain_model_G2']
-        interpolation = self.opt['path']['interpolation']
+        interpolation = self.opt['interpolation']
         if load_path_G is not None:
             if load_path_G2 == None:
                 logger.info('Loading model for G [{:s}] ...'.format(load_path_G))

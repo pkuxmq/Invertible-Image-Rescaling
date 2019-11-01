@@ -63,4 +63,5 @@ path:
     #pretrain_model_G: ../experiments/pretrained_models/RRDB_ESRGAN_x4.pth
   pretrain_model_G: /home/mingqing/InvSR/experiments/pretrained_models/newf1.pth
   pretrain_model_G2: /home/mingqing/InvSR/experiments/pretrained_models/IDCNN.pth
-  interpolation: 0.5
+
+interpolation: 0.5
