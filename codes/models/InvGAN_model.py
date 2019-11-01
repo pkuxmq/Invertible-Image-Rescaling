@@ -288,9 +288,15 @@ class InvGANSRModel(BaseModel):
 
     def load(self):
         load_path_G = self.opt['path']['pretrain_model_G']
+        load_path_G2 = self.opt['path']['pretrain_model_G2']
+        interpolation = self.opt['path']['interpolation']
         if load_path_G is not None:
-            logger.info('Loading model for G [{:s}] ...'.format(load_path_G))
-            self.load_network(load_path_G, self.netG, self.opt['path']['strict_load'])
+            if load_path_G2 == None:
+                logger.info('Loading model for G [{:s}] ...'.format(load_path_G))
+                self.load_network(load_path_G, self.netG, self.opt['path']['strict_load'])
+            else:
+                logger.info('Loading interpolation model for G [{:s}, {:s}, interpolation:{:s}] ...'.format(load_path_G, load_path_G2, str(interpolation)))
+                self.load_network(load_path_G, self.netG, self.opt['path']['strict_load'], load_path2=load_path_G2, interpolation=interpolation)
 
     def save(self, iter_label):
         self.save_network(self.netG, 'G', iter_label)
