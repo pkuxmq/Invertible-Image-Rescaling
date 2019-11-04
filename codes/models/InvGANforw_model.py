@@ -7,7 +7,7 @@ from torch.nn.parallel import DataParallel, DistributedDataParallel
 import models.networks as networks
 import models.lr_scheduler as lr_scheduler
 from .base_model import BaseModel
-from models.modules.loss import GANLoss
+from models.modules.loss import GANLoss, ReconstructionLoss
 
 logger = logging.getLogger('base')
 
@@ -44,23 +44,45 @@ class InvGANforwSRModel(BaseModel):
             self.netD_forw.train()
 
             # loss
+            #if self.train_opt['pixel_criterion']:
+            #    if self.train_opt['pixel_critetion'] == 'l2':
+            #        self.Reconstruction_forw = nn.MSELoss().to(self.device)
+            #        self.Reconstruction_back = nn.MSELoss().to(self.device)
+            #    else:
+            #        self.Reconstruction_forw = nn.L1Loss().to(self.device)
+            #        self.Reconstruction_back = nn.L1Loss().to(self.device)
+            #else:
+            #    if self.train_opt['pixel_critetion_forw'] == 'l2':
+            #        self.Reconstruction_forw = nn.MSELoss().to(self.device)
+            #    else:
+            #        self.Reconstruction_forw = nn.L1Loss().to(self.device)
+            #    if self.train_opt['pixel_critetion_back'] == 'l2':
+            #        self.Reconstruction_back = nn.MSELoss().to(self.device)
+            #    else:
+            #        self.Reconstruction_back = nn.L1Loss().to(self.device)
             if self.train_opt['pixel_criterion']:
-                if self.train_opt['pixel_critetion'] == 'l2':
-                    self.Reconstruction_forw = nn.MSELoss().to(self.device)
-                    self.Reconstruction_back = nn.MSELoss().to(self.device)
-                else:
-                    self.Reconstruction_forw = nn.L1Loss().to(self.device)
-                    self.Reconstruction_back = nn.L1Loss().to(self.device)
+                self.Reconstruction_forw = ReconstructionLoss(losstype=self.train_opt['pixel_criterion'])
+                self.Reconstruction_back = ReconstructionLoss(losstype=self.train_opt['pixel_criterion'])
             else:
-                if self.train_opt['pixel_critetion_forw'] == 'l2':
-                    self.Reconstruction_forw = nn.MSELoss().to(self.device)
-                else:
-                    self.Reconstruction_forw = nn.L1Loss().to(self.device)
-                if self.train_opt['pixel_critetion_back'] == 'l2':
-                    self.Reconstruction_back = nn.MSELoss().to(self.device)
-                else:
-                    self.Reconstruction_back = nn.L1Loss().to(self.device)
+                self.Reconstruction_forw = ReconstructionLoss(losstype=self.train_opt['pixel_criterion_forw'])
+                self.Reconstruction_back = ReconstructionLoss(losstype=self.train_opt['pixel_criterion_back'])
 
+            # feature loss
+            #if self.train_opt['feature_criterion'] == 'l2':
+            #    self.Reconstructionf = nn.MSELoss().to(self.device)
+            #else:
+            #    self.Reconstructionf = nn.L1Loss().to(self.device)
+            self.Reconstructionf = ReconstructionLoss(losstype=self.train_opt['feature_criterion'])
+
+            if train_opt['feature_weight'] > 0:
+                self.l_fea_w = train_opt['feature_weight']
+                self.netF = networks.define_F(opt, use_bn=False).to(self.device)
+                if opt['dist']:
+                    self.netF = DistributedDataParallel(self.netF, device_ids=[torch.cuda.current_device()])
+                else:
+                    self.netF = DataParallel(self.netF)
+            else:
+                self.l_fea_w = 0
 
             # GD gan loss
             self.cri_gan_forw = GANLoss(train_opt['gan_type_forw'], 1.0, 0.0).to(self.device)
@@ -145,7 +167,8 @@ class InvGANforwSRModel(BaseModel):
         l_back_rec = self.train_opt['lambda_rec_back'] * self.Reconstruction_back(x, x_samples_image)
 
         # feature loss
-        l_back_fea = 0
+        if self.l_fea_w > 0:
+            l_back_fea = self.feature_loss(x, x_samples_image)
 
         # GAN loss
         l_back_gan = 0
@@ -224,6 +247,7 @@ class InvGANforwSRModel(BaseModel):
             self.log_dict['l_forw_fit'] = l_forw_fit.item()
             self.log_dict['l_forw_gan'] = l_forw_gan.item()
             self.log_dict['l_back_rec'] = l_back_rec.item()
+            self.log_dict['l_back_fea'] = l_back_fea.item()
         self.log_dict['l_d_forw'] = l_d_forw_total.item()
 
     def test(self):
