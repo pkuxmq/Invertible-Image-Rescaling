@@ -8,6 +8,8 @@ import models.networks as networks
 import models.lr_scheduler as lr_scheduler
 from .base_model import BaseModel
 from models.modules.loss import GANLoss, ReconstructionLoss
+from models.modules.Quantization import Quantization
+from models.modules.Replace import Replace
 
 logger = logging.getLogger('base')
 
@@ -32,6 +34,9 @@ class InvGANSRModel(BaseModel):
         # print network
         self.print_network()
         self.load()
+
+        self.Quantization = Quantization()
+        self.Replace = Replace()
 
         if self.is_train:
             self.netD = networks.define_D(opt).to(self.device)
@@ -194,7 +199,14 @@ class InvGANSRModel(BaseModel):
 
         zshape = self.output[:, 3:, :, :].shape
 
-        yy = torch.cat((self.output[:, :3, :, :], self.noise_batch(zshape)), dim=1)
+        if (not self.train_opt['use_bicubic_rev']) and (not self.train_opt['ignore_quantization']):
+            LR = self.Quantization(self.output[:, :3, :, :])
+        else if self.train_opt['use_bicubic_rev']:
+            LR = self.Replace(self.output[:, :3, :, :], self.var_L)
+        else:
+            LR = self.output[:, :3, :, :]
+
+        yy = torch.cat((LR, self.noise_batch(zshape)), dim=1)
 
         self.fake_H = self.netG(x=yy, rev=True)
 
@@ -256,6 +268,11 @@ class InvGANSRModel(BaseModel):
         self.netG.eval()
         with torch.no_grad():
             self.forw_L = self.netG(x=self.input)[:, :3, :, :]
+
+            if not self.train_opt['use_bicubic_rev']:
+                self.forw_L = self.Quantization(self.forw_L)
+            else:
+                self.forw_L = self.Replace(self.forw_L, self.var_L)
 
         y_forw = torch.cat((self.forw_L, noise_scale * self.noise_batch(zshape)), dim=1)
         with torch.no_grad():

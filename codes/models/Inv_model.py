@@ -8,6 +8,8 @@ import models.networks as networks
 import models.lr_scheduler as lr_scheduler
 from .base_model import BaseModel
 from models.modules.loss import ReconstructionLoss
+from models.modules.Quantization import Quantization
+from models.modules.Replace import Replace
 
 logger = logging.getLogger('base')
 
@@ -32,6 +34,9 @@ class InvSRModel(BaseModel):
         # print network
         self.print_network()
         self.load()
+
+        self.Quantization = Quantization()
+        self.Replace = Replace()
 
         if self.is_train:
             self.netG.train()
@@ -113,7 +118,18 @@ class InvSRModel(BaseModel):
             
         zshape = self.output[:, 3:, :, :].shape
 
-        yy = torch.cat((self.output[:, :3, :, :], self.noise_batch(zshape)), dim=1)
+        #LR = self.output[:, :3, :, :]
+        #LR = (LR * 255.).round() / 255.
+        #LR = LR.detach()
+
+        if (not self.train_opt['use_bicubic_rev']) and (not self.train_opt['ignore_quantization']):
+            LR = self.Quantization(self.output[:, :3, :, :])
+        else if self.train_opt['use_bicubic_rev']:
+            LR = self.Replace(self.output[:, :3, :, :], self.var_L)
+        else:
+            LR = self.output[:, :3, :, :]
+
+        yy = torch.cat((LR, self.noise_batch(zshape)), dim=1)
 
         l_forw_fit, l_forw_mle = self.loss_forward(self.output, self.var_L)
 
@@ -150,6 +166,13 @@ class InvSRModel(BaseModel):
         self.netG.eval()
         with torch.no_grad():
             self.forw_L = self.netG(x=self.input)[:, :3, :, :]
+
+            if not self.train_opt['use_bicubic_rev']:
+                self.forw_L = self.Quantization(self.forw_L)
+            else:
+                self.forw_L = self.Replace(self.forw_L, self.var_L)
+
+        #self.forw_L = (self.forw_L * 255.).round() / 255.
 
         y_forw = torch.cat((self.forw_L, noise_scale * self.noise_batch(zshape)), dim=1)
         with torch.no_grad():

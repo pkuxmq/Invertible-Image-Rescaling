@@ -153,12 +153,12 @@ def main():
             current_step += 1
             if current_step > total_iters:
                 break
-            #### update learning rate
-            model.update_learning_rate(current_step, warmup_iter=opt['train']['warmup_iter'])
-
             #### training
             model.feed_data(train_data)
             model.optimize_parameters(current_step)
+
+            #### update learning rate
+            model.update_learning_rate(current_step, warmup_iter=opt['train']['warmup_iter'])
 
             #### log
             if current_step % opt['logger']['print_freq'] == 0:
