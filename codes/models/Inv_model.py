@@ -9,7 +9,6 @@ import models.lr_scheduler as lr_scheduler
 from .base_model import BaseModel
 from models.modules.loss import ReconstructionLoss
 from models.modules.Quantization import Quantization
-from models.modules.Replace import Replace
 
 logger = logging.getLogger('base')
 
@@ -36,7 +35,6 @@ class InvSRModel(BaseModel):
         self.load()
 
         self.Quantization = Quantization()
-        self.Replace = Replace()
 
         if self.is_train:
             self.netG.train()
@@ -122,10 +120,8 @@ class InvSRModel(BaseModel):
         #LR = (LR * 255.).round() / 255.
         #LR = LR.detach()
 
-        if (not self.train_opt['use_bicubic_rev']) and (not self.train_opt['ignore_quantization']):
+        if (not self.train_opt['ignore_quantization']):
             LR = self.Quantization(self.output[:, :3, :, :])
-        else if self.train_opt['use_bicubic_rev']:
-            LR = self.Replace(self.output[:, :3, :, :], self.var_L)
         else:
             LR = self.output[:, :3, :, :]
 
@@ -167,10 +163,7 @@ class InvSRModel(BaseModel):
         with torch.no_grad():
             self.forw_L = self.netG(x=self.input)[:, :3, :, :]
 
-            if not self.train_opt['use_bicubic_rev']:
-                self.forw_L = self.Quantization(self.forw_L)
-            else:
-                self.forw_L = self.Replace(self.forw_L, self.var_L)
+            self.forw_L = self.Quantization(self.forw_L)
 
         #self.forw_L = (self.forw_L * 255.).round() / 255.
 

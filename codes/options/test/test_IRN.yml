@@ -1,4 +1,4 @@
-name: IRN_q_finetune_x4
+name: IRN_x4
 suffix: ~  # add suffix to saved images
 model: inv-sr
 distortion: sr
@@ -61,4 +61,4 @@ network_G:
 #### path
 path:
     #pretrain_model_G: ../experiments/pretrained_models/RRDB_ESRGAN_x4.pth
-  pretrain_model_G: /home/mingqing/InvSR/experiments/01_IRN_q_finetune_2e-5_DB_l2l1_x4_scratch_DIV2K/models/195000_G.pth
+  pretrain_model_G: /home/mingqing/InvSR/experiments/pretrained_models/IRN.pth
