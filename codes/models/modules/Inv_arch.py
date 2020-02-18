@@ -165,8 +165,106 @@ class ShuffleChannel(nn.Module):
         return 0
 
 
+class Conv1x1(nn.Module):
+    def __init__(self, channel_in):
+        super(Conv1x1, self).__init__()
+        self.channel_in = channel_in
+
+        self.conv_weights = torch.eye(self.channel_in)
+
+        self.conv_weights = nn.Parameter(self.conv_weights)
+
+    def forward(self, x, rev=False):
+        if not rev:
+            conv_weights = self.conv_weights.reshape(self.channel_in, self.channel_in, 1, 1)
+            out = F.conv2d(x, conv_weights, bias=None, stride=1)
+            return out
+        else:
+            inv_weights = torch.inverse(self.conv_weights)
+            #inv_weights = self.conv_weights.inverse().view(*self.conv_weights.shape, 1, 1)
+            inv_weights = inv_weights.reshape(self.channel_in, self.channel_in, 1, 1)
+            out = F.conv2d(x, inv_weights, bias=None, stride=1)
+            return out
+
+
+class ConvDownsampling(nn.Module):
+    def __init__(self, scale):
+        super(ConvDownsampling, self).__init__()
+        self.scale = scale
+        self.scale2 = self.scale ** 2
+
+        self.conv_weights = torch.eye(self.scale2)
+
+        if self.scale == 2: # haar init
+            self.conv_weights[0] = torch.Tensor([1./4, 1./4, 1./4, 1./4])
+            self.conv_weights[1] = torch.Tensor([1./4, -1./4, 1./4, -1./4])
+            self.conv_weights[2] = torch.Tensor([1./4, 1./4, -1./4, -1./4])
+            self.conv_weights[3] = torch.Tensor([1./4, -1./4, -1./4, 1./4])
+        else:
+            self.conv_weights[0] = torch.Tensor([1./(self.scale2)] * (self.scale2))
+
+        self.conv_weights = nn.Parameter(self.conv_weights)
+
+    def forward(self, x, rev=False):
+        if not rev:
+            # downsample
+            # may need improvement
+            h = x.shape[2]
+            w = x.shape[3]
+            wpad = 0
+            hpad = 0
+            if w % self.scale != 0:
+                wpad = self.scale - w % self.scale
+            if h % self.scale != 0:
+                hpad = self.scale - h % self.scale
+            if wpad != 0 or hpad != 0:
+                padding = (wpad // 2, wpad - wpad // 2, hpad // 2, hpad - hadp // 2)
+                pad = nn.ReplicationPad2d(padding)
+                x = pad(x)
+
+            [B, C, H, W] = list(x.size())
+            x = x.reshape(B, C, H // self.scale, self.scale, W // self.scale, self.scale)
+            x = x.permute(0, 1, 3, 5, 2, 4)
+            x = x.reshape(B, C * self.scale2, H // self.scale, W // self.scale)
+
+            # conv
+            conv_weights = self.conv_weights.reshape(self.scale2, self.scale2, 1, 1)
+            conv_weights = conv_weights.repeat(C, 1, 1, 1)
+
+            out = F.conv2d(x, conv_weights, bias=None, stride=1, groups=C)
+
+            out = out.reshape(B, C, self.scale2, H // self.scale, W // self.scale)
+            out = torch.transpose(out, 1, 2)
+            out = out.reshape(B, C * self.scale2, H // self.scale, W // self.scale)
+
+            return out
+        else:
+            inv_weights = torch.inverse(self.conv_weights)
+            inv_weights = inv_weights.reshape(self.scale2, self.scale2, 1, 1)
+
+            [B, C_, H_, W_] = list(x.size())
+            C = C_ // self.scale2
+            H = H_ * self.scale
+            W = W_ * self.scale
+
+            inv_weights = inv_weights.repeat(C, 1, 1, 1)
+
+            x = x.reshape(B, self.scale2, C, H_, W_)
+            x = torch.transpose(x, 1, 2)
+            x = x.reshape(B, C_, H_, W_)
+
+            out = F.conv2d(x, inv_weights, bias=None, stride=1, groups=C)
+
+            out = out.reshape(B, C, self.scale, self.scale, H_, W_)
+            out = out.permute(0, 1, 4, 2, 5, 3)
+            out = out.reshape(B, C, H, W)
+
+            return out
+
+
+
 class InvSRNet(nn.Module):
-    def __init__(self, block_type, channel_in=3, channel_out=3, subnet_constructor=None, block_num=[], upscale_log=2, shuffle_stage1=False):
+    def __init__(self, block_type, channel_in=3, channel_out=3, subnet_constructor=None, block_num=[], upscale_log=2, use_ConvDownsampling=False, use_Conv1x1=False, shuffle_stage1=False):
         super(InvSRNet, self).__init__()
         self.upscale_log = upscale_log
 
@@ -193,7 +291,13 @@ class InvSRNet(nn.Module):
 
         current_channel = channel_in
         for i in range(upscale_log):
-            b = HaarDownsampling(current_channel)
+            if use_Conv1x1:
+                b = Conv1x1(current_channel)
+                operations.append(b)
+            if use_ConvDownsampling:
+                b = ConvDownsampling(2)
+            else:
+                b = HaarDownsampling(current_channel)
             operations.append(b)
             current_channel *= 4
             for j in range(block_num[i + 1]):
@@ -207,6 +311,11 @@ class InvSRNet(nn.Module):
                     print("Error! Undefined block type!")
                     exit(1)
                 operations.append(b)
+
+        if use_Conv1x1:
+            b = Conv1x1(current_channel)
+            operations.append(b)
+
 
         self.operations = nn.ModuleList(operations)
 

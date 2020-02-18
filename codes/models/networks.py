@@ -21,12 +21,19 @@ def define_G(opt):
     else:
         init = 'xavier'
 
+    use_ConvDownsampling = False
+    use_Conv1x1 = False
+    if which_model['use_ConvDownsampling']:
+        use_ConvDownsampling = True
+    if which_model['use_Conv1x1']:
+        use_Conv1x1 = True
+
     upscale_log = int(math.log(opt_net['scale'], 2))
 
     if net_type and net_type == 'InvHSR':
         netG = InvHSRNet(block_type, opt_net['in_nc'], opt_net['out_nc'], subnet(subnet_type, init), opt_net['block_num'], upscale_log)
     else:
-        netG = InvSRNet(block_type, opt_net['in_nc'], opt_net['out_nc'], subnet(subnet_type, init), opt_net['block_num'], upscale_log)
+        netG = InvSRNet(block_type, opt_net['in_nc'], opt_net['out_nc'], subnet(subnet_type, init), opt_net['block_num'], upscale_log, use_ConvDownsampling, use_Conv1x1)
 
     return netG
 
