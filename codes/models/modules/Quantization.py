@@ -5,6 +5,7 @@ class Quant(torch.autograd.Function):
 
     @staticmethod
     def forward(ctx, input):
+        input = torch.clamp(input, 0, 1)
         output = (input * 255.).round() / 255.
         return output
 

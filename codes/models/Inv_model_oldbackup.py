@@ -93,18 +93,10 @@ class InvSRModel(BaseModel):
     def noise_batch(self, dims):
         return torch.randn(tuple(dims)).to(self.device)
 
-    #def loss_forward(self, out, y):
-    #    l_forw_fit = self.train_opt['lambda_fit_forw'] * self.Reconstruction_forw(out[:, :3, :, :], y)
+    def loss_forward(self, out, y):
+        l_forw_fit = self.train_opt['lambda_fit_forw'] * self.Reconstruction_forw(out[:, :3, :, :], y)
 
-    #    z = out[:, 3:, :, :].reshape([out.shape[0], -1])
-    #    l_forw_mle = self.train_opt['lambda_mle_forw'] * torch.sum(torch.norm(z, p=2, dim=1))
-
-    #    return l_forw_fit, l_forw_mle
-
-    def loss_forward(self, out, y, z):
-        l_forw_fit = self.train_opt['lambda_fit_forw'] * self.Reconstruction_forw(out, y)
-
-        z = z.reshape([out.shape[0], -1])
+        z = out[:, 3:, :, :].reshape([out.shape[0], -1])
         l_forw_mle = self.train_opt['lambda_mle_forw'] * torch.sum(torch.norm(z, p=2, dim=1))
 
         return l_forw_fit, l_forw_mle
@@ -134,21 +126,17 @@ class InvSRModel(BaseModel):
         if self.train_opt['use_bicubic']:
             LR = self.var_L
         elif (not self.train_opt['ignore_quantization']):
-            #LR = self.Quantization(self.output[:, :3, :, :])
-            LR = torch.clamp(self.output[:, :3, :, :], 0, 1)
-            LR = self.Quantization(LR)
+            LR = self.Quantization(self.output[:, :3, :, :])
 
             if self.train_opt['apply_jpg']:
                 quality = self.train_opt['jpg_quality'] if self.train_opt['jpg_quality'] else 95
                 LR = self.apply_jpg(LR, quality)
         else:
-            #LR = self.output[:, :3, :, :]
-            LR = torch.clamp(self.output[:, :3, :, :], 0, 1)
+            LR = self.output[:, :3, :, :]
 
         yy = torch.cat((LR, self.noise_batch(zshape)), dim=1)
 
-        #l_forw_fit, l_forw_mle = self.loss_forward(self.output, self.var_L)
-        l_forw_fit, l_forw_mle = self.loss_forward(LR, self.var_L, self.output[:, 3:, :, :])
+        l_forw_fit, l_forw_mle = self.loss_forward(self.output, self.var_L)
 
         l_back_rec = self.loss_backward(self.real_H, yy)
 
