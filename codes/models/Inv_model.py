@@ -132,23 +132,36 @@ class InvSRModel(BaseModel):
         #LR = LR.detach()
 
         if self.train_opt['use_bicubic']:
-            LR = self.var_L
+            #LR = self.var_L
+            LR_g = self.output[:, :3, :, :]
         elif (not self.train_opt['ignore_quantization']):
             #LR = self.Quantization(self.output[:, :3, :, :])
-            LR = torch.clamp(self.output[:, :3, :, :], 0, 1)
-            LR = self.Quantization(LR)
+            LR_g = torch.clamp(self.output[:, :3, :, :], 0, 1)
+            LR_g = self.Quantization(LR_g)
 
-            if self.train_opt['apply_jpg']:
-                quality = self.train_opt['jpg_quality'] if self.train_opt['jpg_quality'] else 95
-                LR = self.apply_jpg(LR, quality)
         else:
             #LR = self.output[:, :3, :, :]
-            LR = torch.clamp(self.output[:, :3, :, :], 0, 1)
-
-        yy = torch.cat((LR, self.noise_batch(zshape)), dim=1)
+            LR_g = torch.clamp(self.output[:, :3, :, :], 0, 1)
 
         #l_forw_fit, l_forw_mle = self.loss_forward(self.output, self.var_L)
-        l_forw_fit, l_forw_mle = self.loss_forward(LR, self.var_L, self.output[:, 3:, :, :])
+        #if self.train_opt['apply_jpg']:
+        #    quality = self.train_opt['jpg_quality'] if self.train_opt['jpg_quality'] else 95
+        #    LRGT = self.apply_jpg(self.var_L, quality).detach()
+        #else:
+        #    LRGT = self.var_L.detach()
+        LRGT = self.var_L.detach()
+
+        l_forw_fit, l_forw_mle = self.loss_forward(LR_g, LRGT, self.output[:, 3:, :, :])
+
+        if self.train_opt['use_bicubic']:
+            LR = self.var_L
+        else:
+            LR = LR_g
+
+        if self.train_opt['apply_jpg']:
+            quality = self.train_opt['jpg_quality'] if self.train_opt['jpg_quality'] else 95
+            LR = self.apply_jpg(LR, quality)
+        yy = torch.cat((LR, self.noise_batch(zshape)), dim=1)
 
         l_back_rec = self.loss_backward(self.real_H, yy)
 
@@ -183,6 +196,7 @@ class InvSRModel(BaseModel):
         self.netG.eval()
         with torch.no_grad():
             self.forw_L = self.netG(x=self.input)[:, :3, :, :]
+            self.forw_L = torch.clamp(self.forw_L, 0, 1)
 
             self.forw_L = self.Quantization(self.forw_L)
 
