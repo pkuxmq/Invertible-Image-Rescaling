@@ -52,6 +52,8 @@ for test_loader in test_loaders:
     test_results['psnr_y_lr'] = []
     test_results['ssim_y_lr'] = []
 
+    test_results['bpp'] = []
+
     for data in test_loader:
         need_GT = False if test_loader.dataset.opt['dataroot_GT'] is None else True
         model.feed_data(data, need_GT=need_GT)
@@ -86,15 +88,25 @@ for test_loader in test_loaders:
             save_img_path = osp.join(dataset_dir, img_name + '_LR.png')
         util.save_img(lr_img, save_img_path)
 
+        # get lr image size
+        lr_size = osp.getsize(save_img_path)
+
         if suffix:
             save_img_path = osp.join(dataset_dir, img_name + suffix + '_LRGT.png')
         else:
             save_img_path = osp.join(dataset_dir, img_name + '_LRGT.png')
         util.save_img(lrgt_img, save_img_path)
 
-        # calculate PSNR and SSIM
+        # calculate PSNR and SSIM, and bpp
         if need_GT:
             gt_img = util.tensor2img(visuals['GT'])
+
+            # bpp
+            h, w = gt_img.shape[0], gt_img.shape[1]
+            bpp = lr_size * 8. / (h * w)
+            test_results['bpp'].append(bpp)
+
+
             gt_img = gt_img / 255.
             sr_img = sr_img / 255.
 
@@ -142,10 +154,10 @@ for test_loader in test_loaders:
                 test_results['ssim_y_lr'].append(ssim_y_lr)
 
                 logger.info(
-                        '{:20s} - PSNR: {:.6f} dB; SSIM: {:.6f}; PSNR_Y: {:.6f} dB; SSIM_Y: {:.6f}. LR PSNR: {:.6f} dB; SSIM: {:.6f}; PSNR_Y: {:.6f} dB; SSIM_Y: {:.6f}.'.
-                    format(img_name, psnr, ssim, psnr_y, ssim_y, psnr_lr, ssim_lr, psnr_y_lr, ssim_y_lr))
+                        '{:20s} - PSNR: {:.6f} dB; SSIM: {:.6f}; PSNR_Y: {:.6f} dB; SSIM_Y: {:.6f}. LR PSNR: {:.6f} dB; SSIM: {:.6f}; PSNR_Y: {:.6f} dB; SSIM_Y: {:.6f}. bpp: {:.6f}.'.
+                    format(img_name, psnr, ssim, psnr_y, ssim_y, psnr_lr, ssim_lr, psnr_y_lr, ssim_y_lr, bpp))
             else:
-                logger.info('{:20s} - PSNR: {:.6f} dB; SSIM: {:.6f}. LR PSNR: {:.6f} dB; SSIM: {:.6f}.'.format(img_name, psnr, ssim, psnr_lr, ssim_lr))
+                logger.info('{:20s} - PSNR: {:.6f} dB; SSIM: {:.6f}. LR PSNR: {:.6f} dB; SSIM: {:.6f}. bpp: {:.6f}.'.format(img_name, psnr, ssim, psnr_lr, ssim_lr, bpp))
         else:
             logger.info(img_name)
 
@@ -156,6 +168,8 @@ for test_loader in test_loaders:
 
         ave_psnr_lr = sum(test_results['psnr_lr']) / len(test_results['psnr_lr'])
         ave_ssim_lr = sum(test_results['ssim_lr']) / len(test_results['ssim_lr'])
+
+        ave_bpp = sum(test_results['bpp']) / len(test_results['bpp'])
 
         logger.info(
                 '----Average PSNR/SSIM results for {}----\n\tpsnr: {:.6f} db; ssim: {:.6f}. LR psnr: {:.6f} db; ssim: {:.6f}.\n'.format(
@@ -169,3 +183,5 @@ for test_loader in test_loaders:
             logger.info(
                 '----Y channel, average PSNR/SSIM----\n\tPSNR_Y: {:.6f} dB; SSIM_Y: {:.6f}. LR PSNR_Y: {:.6f} dB; SSIM_Y: {:.6f}.\n'.
                 format(ave_psnr_y, ave_ssim_y, ave_psnr_y_lr, ave_ssim_y_lr))
+        logger.info(
+                '----Average bpp----\n\tbpp: {:.6f}.\n'.format(ave_bpp))
