@@ -1,17 +1,17 @@
 
 #### general settings
 
-name: 01_IRN+_correct_DB_l2l1_x4_scratch_DIV2K
+name: 01_IRN_DB_l2l1_x8_scratch_DIV2K
 
 use_tb_logger: true
 
-model: invgan-sr
+model: inv-sr
 
 distortion: sr
 
-scale: 4
+scale: 8
 
-gpu_ids: [2]
+gpu_ids: [0]
 
 
 
@@ -52,8 +52,8 @@ datasets:
     #dataroot_GT: /home/shuxin/data/DIV2K/DIV2K_train_HR.lmdb
     dataroot_GT: /home/mingqing/data/DIV2K_train_HR/
 
-    #dataroot_LQ: /home/shuxin/data/DIV2K/DIV2K_train_LR_bicubic/X4.lmdb
-    dataroot_LQ: /home/mingqing/data/DIV2K_train_LR_bicubic/X4/
+    #dataroot_LQ: /home/shuxin/data/DIV2K/DIV2K_train_LR_bicubic/X2.lmdb
+    dataroot_LQ: /home/mingqing/data/DIV2K_train_LR_x8/
 
 
 
@@ -80,10 +80,10 @@ datasets:
     mode: LQGT
 
     #dataroot_GT: /home/shuxin/data/DIV2K/DIV2K_valid_HR.lmdb
-    dataroot_GT: /home/mingqing/data//DIV2K_valid_HR/
+    dataroot_GT: /home/mingqing/data/DIV2K_valid_HR/
 
-    #dataroot_LQ: /home/shuxin/data/DIV2K/DIV2K_valid_LR_bicubic/X4.lmdb
-    dataroot_LQ: /home/mingqing/data/DIV2K_valid_LR_bicubic/X4/
+    #dataroot_LQ: /home/shuxin/data/DIV2K/DIV2K_valid_LR_bicubic/X2.lmdb
+    dataroot_GT: /home/mingqing/data/DIV2K_valid_LR_x8/
 
 
 
@@ -99,19 +99,11 @@ network_G:
 
   out_nc: 3
 
-  block_num: [0, 8, 8]
+  block_num: [0, 8, 8, 8]
 
-  scale: 4
+  scale: 8
 
   init: xavier
-
-network_D:
-
-  which_model_D: discriminator_vgg_128
-
-  in_nc: 3
-
-  nf: 64
 
 
 
@@ -119,7 +111,7 @@ network_D:
 
 path:
 
-  pretrain_model_G: /home/mingqing/InvSR/experiments/pretrained_models/IRN_x4_correct.pth
+  pretrain_model_G: ~ 
 
   strict_load: true
 
@@ -131,13 +123,13 @@ path:
 
 train:
 
-  lr_G: !!float 1e-4
+  lr_G: !!float 2e-4
 
   beta1: 0.9
 
   beta2: 0.999
 
-  niter: 400000
+  niter: 500000
 
   warmup_iter: -1  # no warm up
 
@@ -147,19 +139,15 @@ train:
 
 
 
-  lr_steps: [50000, 100000, 200000, 300000]
+  lr_steps: [100000, 200000, 300000, 400000]
 
   lr_gamma: 0.5
 
 
 
   pixel_criterion_forw: l2
+
   pixel_criterion_back: l1
-
-  feature_criterion: l1
-
-  feature_weight: 0.01
-
 
 
   manual_seed: 10
@@ -167,31 +155,15 @@ train:
   val_freq: !!float 5e3
 
 
-  lambda_fit_forw: 16
+  lambda_fit_forw: 64.
 
-  lambda_rec_back: 0.01
+  lambda_rec_back: 1
 
-  lambda_mle_forw: 0
-
-  gradient_clipping: 10
+  lambda_mle_forw: 1
 
   weight_decay_G: !!float 1e-5
 
-
-  lr_D: !!float 1e-4
-
-  weight_decay_D: 0
-
-  beta1_D: 0.9
-
-  beta2_D: 0.99
-
-  gan_type: gan
-
-  gan_weight: !!float 1
-
-  D_update_ratio: 1
-  D_init_iters: 5000
+  gradient_clipping: 10
 
 
 #### logger
