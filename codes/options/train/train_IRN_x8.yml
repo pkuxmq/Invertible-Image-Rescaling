@@ -83,7 +83,7 @@ datasets:
     dataroot_GT: /home/mingqing/data/DIV2K_valid_HR/
 
     #dataroot_LQ: /home/shuxin/data/DIV2K/DIV2K_valid_LR_bicubic/X2.lmdb
-    dataroot_GT: /home/mingqing/data/DIV2K_valid_LR_x8/
+    dataroot_LQ: /home/mingqing/data/DIV2K_valid_LR_x8/
 
 
 
