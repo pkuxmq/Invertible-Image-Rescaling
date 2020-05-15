@@ -105,7 +105,8 @@ class InvSRModel(BaseModel):
         l_forw_fit = self.train_opt['lambda_fit_forw'] * self.Reconstruction_forw(out, y)
 
         z = z.reshape([out.shape[0], -1])
-        l_forw_mle = self.train_opt['lambda_mle_forw'] * torch.sum(torch.norm(z, p=2, dim=1))
+        #l_forw_mle = self.train_opt['lambda_mle_forw'] * torch.sum(torch.norm(z, p=2, dim=1))
+        l_forw_mle = self.train_opt['lambda_mle_forw'] * torch.sum(z**2) / z.shape[0]
 
         return l_forw_fit, l_forw_mle
 
