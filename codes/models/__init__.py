@@ -6,9 +6,9 @@ def create_model(opt):
     model = opt['model']
 
     if model == 'IRN':
-        from .Inv_model import InvSRModel as M
+        from .IRN_model import IRNModel as M
     elif model == 'IRN+':
-        from .InvGAN_model import InvGANSRModel as M
+        from .IRNp_model import IRNpModel as M
     else:
         raise NotImplementedError('Model [{:s}] not recognized.'.format(model))
     m = M(opt)

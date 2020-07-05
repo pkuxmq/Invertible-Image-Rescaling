@@ -12,9 +12,9 @@ from models.modules.Quantization import Quantization
 
 logger = logging.getLogger('base')
 
-class InvSRModel(BaseModel):
+class IRNModel(BaseModel):
     def __init__(self, opt):
-        super(InvSRModel, self).__init__(opt)
+        super(IRNModel, self).__init__(opt)
 
         if opt['dist']:
             self.rank = torch.distributed.get_rank()

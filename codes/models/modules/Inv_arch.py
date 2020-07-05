@@ -84,9 +84,9 @@ class HaarDownsampling(nn.Module):
         return self.last_jac
 
 
-class InvSRNet(nn.Module):
+class InvRescaleNet(nn.Module):
     def __init__(self, channel_in=3, channel_out=3, subnet_constructor=None, block_num=[], down_num=2):
-        super(InvSRNet, self).__init__()
+        super(InvRescaleNet, self).__init__()
 
         operations = []
 

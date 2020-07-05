@@ -194,7 +194,7 @@ def main():
 
                     lr_img = util.tensor2img(visuals['LR'])
 
-                    gtl_img = util.tensor2img(visuals['LQ'])
+                    gtl_img = util.tensor2img(visuals['LR_ref'])
 
                     # Save SR images for reference
                     save_img_path = os.path.join(img_dir,
@@ -209,7 +209,7 @@ def main():
                     if current_step == opt['train']['val_freq']:
                         save_img_path_gt = os.path.join(img_dir, '{:s}_GT_{:d}.png'.format(img_name, current_step))
                         util.save_img(gt_img, save_img_path_gt)
-                        save_img_path_gtl = os.path.join(img_dir, '{:s}_GTLR_{:d}.png'.format(img_name, current_step))
+                        save_img_path_gtl = os.path.join(img_dir, '{:s}_LR_ref_{:d}.png'.format(img_name, current_step))
                         util.save_img(gtl_img, save_img_path_gtl)
 
                     # calculate PSNR

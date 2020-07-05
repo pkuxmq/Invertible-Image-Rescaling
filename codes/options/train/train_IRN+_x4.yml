@@ -53,7 +53,7 @@ network_D:
 #### path
 
 path:
-  pretrain_model_G: /home/mingqing/InvSR/experiments/pretrained_models/IRN_x4.pth
+  pretrain_model_G: ../experiments/pretrained_models/IRN_x4.pth
   strict_load: true
   resume_state: ~
 

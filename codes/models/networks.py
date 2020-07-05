@@ -21,7 +21,7 @@ def define_G(opt):
 
     down_num = int(math.log(opt_net['scale'], 2))
 
-    netG = InvSRNet(opt_net['in_nc'], opt_net['out_nc'], subnet(subnet_type, init), opt_net['block_num'], down_num)
+    netG = InvRescaleNet(opt_net['in_nc'], opt_net['out_nc'], subnet(subnet_type, init), opt_net['block_num'], down_num)
 
     return netG
 
