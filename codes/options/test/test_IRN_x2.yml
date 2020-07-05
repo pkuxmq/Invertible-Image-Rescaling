@@ -1,10 +1,10 @@
-name: IDCNN_x2
+name: IRN_x2
 suffix: ~  # add suffix to saved images
-model: inv-sr
+model: IRN
 distortion: sr
 scale: 2
 crop_border: ~  # crop border when evaluation. If None(~), crop the scale pixels
-gpu_ids: [1]
+gpu_ids: [0]
 
 datasets:
   test_1:  # the 1st test dataset
@@ -33,31 +33,18 @@ datasets:
     dataroot_GT: /home/shuxin/data/DIV2K/DIV2K_valid_HR.lmdb
     dataroot_LQ: /home/shuxin/data/DIV2K/DIV2K_valid_LR_bicubic/X2.lmdb
 
-#### network structures
-#network_G:
-#  which_model_G: RRDBNet
-#  in_nc: 3
-#  out_nc: 3
-#  nf: 64
-#  nb: 23
-#  upscale: 4
 
+#### network
 network_G:
-
   which_model_G:
-    block_type: InvBlockExp
     subnet_type: DBNet
-
   in_nc: 3
-
   out_nc: 3
-
-  block_num: [0, 8]
-
+  block_num: [8]
   scale: 2
-
   init: xavier
+
 
 #### path
 path:
-  pretrain_model_G: /home/mingqing/InvSR/experiments/pretrained_models/IDCNN_x2.pth
+  pretrain_model_G: ../experiments/pretrained_models/IRN_x2.pth

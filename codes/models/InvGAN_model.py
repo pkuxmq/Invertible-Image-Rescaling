@@ -47,37 +47,13 @@ class InvGANSRModel(BaseModel):
             self.netD.train()
 
             # loss
-            #if self.train_opt['pixel_criterion']:
-            #    if self.train_opt['pixel_critetion'] == 'l2':
-            #        self.Reconstruction_forw = nn.MSELoss().to(self.device)
-            #        self.Reconstruction_back = nn.MSELoss().to(self.device)
-            #    else:
-            #        self.Reconstruction_forw = nn.L1Loss().to(self.device)
-            #        self.Reconstruction_back = nn.L1Loss().to(self.device)
-            #else:
-            #    if self.train_opt['pixel_critetion_forw'] == 'l2':
-            #        self.Reconstruction_forw = nn.MSELoss().to(self.device)
-            #    else:
-            #        self.Reconstruction_forw = nn.L1Loss().to(self.device)
-            #    if self.train_opt['pixel_critetion_back'] == 'l2':
-            #        self.Reconstruction_back = nn.MSELoss().to(self.device)
-            #    else:
-            #        self.Reconstruction_back = nn.L1Loss().to(self.device)
-            if self.train_opt['pixel_criterion']:
-                self.Reconstruction_forw = ReconstructionLoss(losstype=self.train_opt['pixel_criterion'])
-                self.Reconstruction_back = ReconstructionLoss(losstype=self.train_opt['pixel_criterion'])
-            else:
-                self.Reconstruction_forw = ReconstructionLoss(losstype=self.train_opt['pixel_criterion_forw'])
-                self.Reconstruction_back = ReconstructionLoss(losstype=self.train_opt['pixel_criterion_back'])
+            self.Reconstruction_forw = ReconstructionLoss(losstype=self.train_opt['pixel_criterion_forw'])
+            self.Reconstruction_back = ReconstructionLoss(losstype=self.train_opt['pixel_criterion_back'])
 
             # feature loss
-            #if self.train_opt['feature_criterion'] == 'l2':
-            #    self.Reconstructionf = nn.MSELoss().to(self.device)
-            #else:
-            #    self.Reconstructionf = nn.L1Loss().to(self.device)
-            self.Reconstructionf = ReconstructionLoss(losstype=self.train_opt['feature_criterion'])
-
             if train_opt['feature_weight'] > 0:
+                self.Reconstructionf = ReconstructionLoss(losstype=self.train_opt['feature_criterion'])
+
                 self.l_fea_w = train_opt['feature_weight']
                 self.netF = networks.define_F(opt, use_bn=False).to(self.device)
                 if opt['dist']:
@@ -90,6 +66,7 @@ class InvGANSRModel(BaseModel):
             # GD gan loss
             self.cri_gan = GANLoss(train_opt['gan_type'], 1.0, 0.0).to(self.device)
             self.l_gan_w = train_opt['gan_weight']
+
             # D_update_ratio and D_init_iters
             self.D_update_ratio = train_opt['D_update_ratio'] if train_opt['D_update_ratio'] else 1
             self.D_init_iters = train_opt['D_init_iters'] if train_opt['D_init_iters'] else 0
@@ -109,6 +86,7 @@ class InvGANSRModel(BaseModel):
                                                 weight_decay=wd_G,
                                                 betas=(train_opt['beta1'], train_opt['beta2']))
             self.optimizers.append(self.optimizer_G)
+
             # D
             wd_D = train_opt['weight_decay_D'] if train_opt['weight_decay_D'] else 0
             self.optimizer_D = torch.optim.Adam(self.netD.parameters(), lr=train_opt['lr_D'], weight_decay=wd_D, betas=(train_opt['beta1_D'], train_opt['beta2_D']))
@@ -134,27 +112,17 @@ class InvGANSRModel(BaseModel):
 
             self.log_dict = OrderedDict()
 
-    def feed_data(self, data, need_GT=True):
-        self.var_L = data['LQ'].to(self.device)  # LQ
-        if need_GT:
-            self.real_H = data['GT'].to(self.device)  # GT
-            self.var_H = self.real_H
-            input_ref = data['ref'] if 'ref' in data else data['GT']
-            self.var_ref = input_ref.to(self.device)
+    def feed_data(self, data):
+        self.ref_L = data['LQ'].to(self.device)  # LQ
+        self.real_H = data['GT'].to(self.device)  # GT
 
-    def noise_batch(self, dims):
+    def gaussian_batch(self, dims):
         return torch.randn(tuple(dims)).to(self.device)
 
     def loss_forward(self, out, y):
         l_forw_fit = self.train_opt['lambda_fit_forw'] * self.Reconstruction_forw(out[:, :3, :, :], y)
 
-        if self.train_opt['lambda_mle_forw']:
-            z = out[:, 3:, :, :].reshape([out.shape[0], -1])
-            l_forw_mle = self.train_opt['lambda_mle_forw'] * torch.sum(torch.norm(z, p=2, dim=1))
-        else:
-            l_forw_mle = 0
-
-        return l_forw_fit, l_forw_mle
+        return l_forw_fit
 
     def loss_backward(self, x, x_samples):
         x_samples_image = x_samples[:, :3, :, :]
@@ -190,28 +158,25 @@ class InvGANSRModel(BaseModel):
             p.requires_grad = False
 
         self.optimizer_G.zero_grad()
+
         self.input = self.real_H
-
         self.output = self.netG(x=self.input)
-        loss = 0
 
+        loss = 0
         zshape = self.output[:, 3:, :, :].shape
 
-        if (not self.train_opt['ignore_quantization']):
-            LR = self.Quantization(self.output[:, :3, :, :])
-        else:
-            LR = self.output[:, :3, :, :]
+        LR = self.Quantization(self.output[:, :3, :, :])
 
-        yy = torch.cat((LR, self.noise_batch(zshape)), dim=1)
+        gaussian_scale = self.train_opt['gaussian_scale'] if self.train_opt['gaussian_scale'] != None else 1
+        y_ = torch.cat((LR, gaussian_scale * self.gaussian_batch(zshape)), dim=1)
 
-        self.fake_H = self.netG(x=yy, rev=True)
+        self.fake_H = self.netG(x=y_, rev=True)
 
         if step % self.D_update_ratio == 0 and step > self.D_init_iters:
-            l_forw_fit, l_forw_mle = self.loss_forward(self.output, self.var_L)
-
+            l_forw_fit = self.loss_forward(self.output, self.ref_L)
             l_back_rec, l_back_fea, l_back_gan = self.loss_backward(self.real_H, self.fake_H)
 
-            loss += l_forw_fit + l_forw_mle + l_back_rec + l_back_fea + l_back_gan
+            loss += l_forw_fit + l_back_rec + l_back_fea + l_back_gan
 
             loss.backward()
 
@@ -227,7 +192,7 @@ class InvGANSRModel(BaseModel):
 
         self.optimizer_D.zero_grad()
         l_d_total = 0
-        pred_d_real = self.netD(self.var_ref)
+        pred_d_real = self.netD(self.real_H)
         pred_d_fake = self.netD(self.fake_H.detach())
         if self.opt['train']['gan_type'] == 'gan':
             l_d_real = self.cri_gan(pred_d_real, True)
@@ -250,39 +215,56 @@ class InvGANSRModel(BaseModel):
         self.log_dict['l_d'] = l_d_total.item()
 
     def test(self):
-        Lshape = self.var_L.shape
+        Lshape = self.ref_L.shape
+
         input_dim = Lshape[1]
         self.input = self.real_H
 
         zshape = [Lshape[0], input_dim * (self.opt['scale']**2) - Lshape[1], Lshape[2], Lshape[3]]
 
-        noise_scale = 1
-
-        if self.test_opt and self.test_opt['noise_scale']:
-            noise_scale = self.test_opt['noise_scale']
+        gaussian_scale = 1
+        if self.test_opt and self.test_opt['gaussian_scale'] != None:
+            gaussian_scale = self.test_opt['gaussian_scale']
 
         self.netG.eval()
         with torch.no_grad():
             self.forw_L = self.netG(x=self.input)[:, :3, :, :]
-
             self.forw_L = self.Quantization(self.forw_L)
-
-        y_forw = torch.cat((self.forw_L, noise_scale * self.noise_batch(zshape)), dim=1)
-        with torch.no_grad():
+            y_forw = torch.cat((self.forw_L, gaussian_scale * self.gaussian_batch(zshape)), dim=1)
             self.fake_H = self.netG(x=y_forw, rev=True)[:, :3, :, :]
 
         self.netG.train()
 
+    def downscale(self, HR_img):
+        self.netG.eval()
+        with torch.no_grad():
+            LR_img = self.netG(x=HR_img)[:, :3, :, :]
+            LR_img = self.Quantization(self.forw_L)
+        self.netG.train()
+
+        return LR_img
+
+    def upscale(self, LR_img, scale, gaussian_scale=1):
+        Lshape = LR_img.shape
+        zshape = [Lshape[0], Lshape[1] * (scale**2 - 1), Lshape[2], Lshape[3]]
+        y_ = torch.cat((LR_img, gaussian_scale * self.gaussian_batch(zshape)), dim=1)
+
+        self.netG.eval()
+        with torch.no_grad():
+            HR_img = self.netG(x=y_, rev=True)[:, :3, :, :]
+        self.netG.train()
+
+        return HR_img
+
     def get_current_log(self):
         return self.log_dict
 
-    def get_current_visuals(self, need_GT=True):
+    def get_current_visuals(self):
         out_dict = OrderedDict()
-        out_dict['LQ'] = self.var_L.detach()[0].float().cpu()
+        out_dict['LR_ref'] = self.ref_L.detach()[0].float().cpu()
         out_dict['SR'] = self.fake_H.detach()[0].float().cpu()
         out_dict['LR'] = self.forw_L.detach()[0].float().cpu()
-        if need_GT:
-            out_dict['GT'] = self.real_H.detach()[0].float().cpu()
+        out_dict['GT'] = self.real_H.detach()[0].float().cpu()
         return out_dict
 
     def print_network(self):
@@ -298,15 +280,15 @@ class InvGANSRModel(BaseModel):
 
     def load(self):
         load_path_G = self.opt['path']['pretrain_model_G']
-        load_path_G2 = self.opt['path']['pretrain_model_G2']
-        interpolation = self.opt['interpolation']
         if load_path_G is not None:
-            if load_path_G2 == None:
-                logger.info('Loading model for G [{:s}] ...'.format(load_path_G))
-                self.load_network(load_path_G, self.netG, self.opt['path']['strict_load'])
-            else:
-                logger.info('Loading interpolation model for G [{:s}, {:s}, interpolation:{:s}] ...'.format(load_path_G, load_path_G2, str(interpolation)))
-                self.load_network(load_path_G, self.netG, self.opt['path']['strict_load'], load_path2=load_path_G2, interpolation=interpolation)
+            logger.info('Loading model for G [{:s}] ...'.format(load_path_G))
+            self.load_network(load_path_G, self.netG, self.opt['path']['strict_load'])
+
+        load_path_D = self.opt['path']['pretrain_model_D']
+        if load_path_D is not None:
+            logger.info('Loading model for D [{:s}] ...'.format(load_path_D))
+            self.load_network(load_path_D, self.netD, self.opt['path']['strict_load'])
 
     def save(self, iter_label):
         self.save_network(self.netG, 'G', iter_label)
+        self.save_network(self.netD, 'D', iter_label)

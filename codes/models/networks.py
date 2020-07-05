@@ -13,27 +13,15 @@ logger = logging.getLogger('base')
 def define_G(opt):
     opt_net = opt['network_G']
     which_model = opt_net['which_model_G']
-    net_type = which_model['net_type']
-    block_type = which_model['block_type']
     subnet_type = which_model['subnet_type']
     if opt_net['init']:
         init = opt_net['init']
     else:
         init = 'xavier'
 
-    use_ConvDownsampling = False
-    use_Conv1x1 = False
-    if which_model['use_ConvDownsampling']:
-        use_ConvDownsampling = True
-    if which_model['use_Conv1x1']:
-        use_Conv1x1 = True
+    down_num = int(math.log(opt_net['scale'], 2))
 
-    upscale_log = int(math.log(opt_net['scale'], 2))
-
-    if net_type and net_type == 'InvHSR':
-        netG = InvHSRNet(block_type, opt_net['in_nc'], opt_net['out_nc'], subnet(subnet_type, init), opt_net['block_num'], upscale_log)
-    else:
-        netG = InvSRNet(block_type, opt_net['in_nc'], opt_net['out_nc'], subnet(subnet_type, init), opt_net['block_num'], upscale_log, use_ConvDownsampling, use_Conv1x1)
+    netG = InvSRNet(opt_net['in_nc'], opt_net['out_nc'], subnet(subnet_type, init), opt_net['block_num'], down_num)
 
     return netG
 
@@ -45,8 +33,6 @@ def define_D(opt):
 
     if which_model == 'discriminator_vgg_128':
         netD = SRGAN_arch.Discriminator_VGG_128(in_nc=opt_net['in_nc'], nf=opt_net['nf'])
-    elif which_model == 'discriminator_vgg_32':
-        netD = SRGAN_arch.Discriminator_VGG_32(in_nc=opt_net['in_nc'], nf=opt_net['nf'])
     else:
         raise NotImplementedError('Discriminator model [{:s}] not recognized'.format(which_model))
     return netD

@@ -5,32 +5,6 @@ import torch.nn.functional as F
 import numpy as np
 
 
-class InvBlock(nn.Module):
-    def __init__(self, subnet_constructor, channel_num, channel_split_num):
-        super(InvBlock, self).__init__()
-
-        self.split_len1 = channel_split_num
-        self.split_len2 = channel_num - channel_split_num
-
-        self.F = subnet_constructor(self.split_len2, self.split_len1)
-        self.G = subnet_constructor(self.split_len1, self.split_len2)
-
-    def forward(self, x, rev=False):
-        x1, x2 = (x.narrow(1, 0, self.split_len1), x.narrow(1, self.split_len1, self.split_len2))
-
-        if not rev:
-            y1 = x1 + self.F(x2)
-            y2 = x2 + self.G(y1)
-        else:
-            y2 = x2 - self.G(x1)
-            y1 = x1 - self.F(y2)
-
-        return torch.cat((y1, y2), 1)
-
-    def jacobian(self, x, rev=False):
-        return 0
-
-
 class InvBlockExp(nn.Module):
     def __init__(self, subnet_constructor, channel_num, channel_split_num, clamp=1.):
         super(InvBlockExp, self).__init__()
@@ -63,45 +37,6 @@ class InvBlockExp(nn.Module):
             jac = torch.sum(self.s)
         else:
             jac = -torch.sum(self.s)
-
-        return jac / x.shape[0]
-
-
-class InvBlockExp2(nn.Module):
-    def __init__(self, subnet_constructor, channel_num, channel_split_num, clamp=1.):
-        super(InvBlockExp2, self).__init__()
-
-        self.split_len1 = channel_split_num
-        self.split_len2 = channel_num - channel_split_num
-
-        self.clamp = clamp
-
-        self.F = subnet_constructor(self.split_len2, self.split_len1)
-        self.G = subnet_constructor(self.split_len1, self.split_len2)
-        self.H = subnet_constructor(self.split_len1, self.split_len2)
-        self.I = subnet_constructor(self.split_len2, self.split_len1)
-
-    def forward(self, x, rev=False):
-        x1, x2 = (x.narrow(1, 0, self.split_len1), x.narrow(1, self.split_len1, self.split_len2))
-
-        if not rev:
-            self.s1 = self.clamp * (torch.sigmoid(self.I(x2)) * 2 - 1)
-            y1 = x1.mul(torch.exp(self.s1)) + self.F(x2)
-            self.s2 = self.clamp * (torch.sigmoid(self.H(y1)) * 2 - 1)
-            y2 = x2.mul(torch.exp(self.s2)) + self.G(y1)
-        else:
-            self.s2 = self.clamp * (torch.sigmoid(self.H(x1)) * 2 - 1)
-            y2 = (x2 - self.G(x1)).div(torch.exp(self.s2))
-            self.s1 = self.clamp * (torch.sigmoid(self.I(y2)) * 2 - 1)
-            y1 = (x1 - self.F(y2)).div(torch.exp(self.s1))
-
-        return torch.cat((y1, y2), 1)
-
-    def jacobian(self, x, rev=False):
-        if not rev:
-            jac = torch.sum(self.s1) + torch.sum(self.s2)
-        else:
-            jac = -torch.sum(self.s1) - torch.sum(self.s2)
 
         return jac / x.shape[0]
 
@@ -149,173 +84,20 @@ class HaarDownsampling(nn.Module):
         return self.last_jac
 
 
-class ShuffleChannel(nn.Module):
-    def __init__(self, channel_num, channel_split_num):
-        super(ShuffleChannel, self).__init__()
-        self.channel_num = channel_num
-        self.channel_split_num = channel_split_num
-
-    def forward(self, x, rev=False):
-        if not rev:
-            return torch.cat((x[:, self.channel_split_num:, :, :], x[:, :self.channel_split_num, :, :]), 1)
-        else:
-            return torch.cat((x[:, self.channel_num - self.channel_split_num:, :, :], x[:, :self.channel_num - self.channel_split_num, :, :]), 1)
-
-    def jacobian(self, x, rev=False):
-        return 0
-
-
-class Conv1x1(nn.Module):
-    def __init__(self, channel_in):
-        super(Conv1x1, self).__init__()
-        self.channel_in = channel_in
-
-        self.conv_weights = torch.eye(self.channel_in)
-
-        self.conv_weights = nn.Parameter(self.conv_weights)
-
-    def forward(self, x, rev=False):
-        if not rev:
-            conv_weights = self.conv_weights.reshape(self.channel_in, self.channel_in, 1, 1)
-            out = F.conv2d(x, conv_weights, bias=None, stride=1)
-            return out
-        else:
-            inv_weights = torch.inverse(self.conv_weights)
-            #inv_weights = self.conv_weights.inverse().view(*self.conv_weights.shape, 1, 1)
-            inv_weights = inv_weights.reshape(self.channel_in, self.channel_in, 1, 1)
-            out = F.conv2d(x, inv_weights, bias=None, stride=1)
-            return out
-
-
-class ConvDownsampling(nn.Module):
-    def __init__(self, scale):
-        super(ConvDownsampling, self).__init__()
-        self.scale = scale
-        self.scale2 = self.scale ** 2
-
-        self.conv_weights = torch.eye(self.scale2)
-
-        if self.scale == 2: # haar init
-            self.conv_weights[0] = torch.Tensor([1./4, 1./4, 1./4, 1./4])
-            self.conv_weights[1] = torch.Tensor([1./4, -1./4, 1./4, -1./4])
-            self.conv_weights[2] = torch.Tensor([1./4, 1./4, -1./4, -1./4])
-            self.conv_weights[3] = torch.Tensor([1./4, -1./4, -1./4, 1./4])
-        else:
-            self.conv_weights[0] = torch.Tensor([1./(self.scale2)] * (self.scale2))
-
-        self.conv_weights = nn.Parameter(self.conv_weights)
-
-    def forward(self, x, rev=False):
-        if not rev:
-            # downsample
-            # may need improvement
-            h = x.shape[2]
-            w = x.shape[3]
-            wpad = 0
-            hpad = 0
-            if w % self.scale != 0:
-                wpad = self.scale - w % self.scale
-            if h % self.scale != 0:
-                hpad = self.scale - h % self.scale
-            if wpad != 0 or hpad != 0:
-                padding = (wpad // 2, wpad - wpad // 2, hpad // 2, hpad - hadp // 2)
-                pad = nn.ReplicationPad2d(padding)
-                x = pad(x)
-
-            [B, C, H, W] = list(x.size())
-            x = x.reshape(B, C, H // self.scale, self.scale, W // self.scale, self.scale)
-            x = x.permute(0, 1, 3, 5, 2, 4)
-            x = x.reshape(B, C * self.scale2, H // self.scale, W // self.scale)
-
-            # conv
-            conv_weights = self.conv_weights.reshape(self.scale2, self.scale2, 1, 1)
-            conv_weights = conv_weights.repeat(C, 1, 1, 1)
-
-            out = F.conv2d(x, conv_weights, bias=None, stride=1, groups=C)
-
-            out = out.reshape(B, C, self.scale2, H // self.scale, W // self.scale)
-            out = torch.transpose(out, 1, 2)
-            out = out.reshape(B, C * self.scale2, H // self.scale, W // self.scale)
-
-            return out
-        else:
-            inv_weights = torch.inverse(self.conv_weights)
-            inv_weights = inv_weights.reshape(self.scale2, self.scale2, 1, 1)
-
-            [B, C_, H_, W_] = list(x.size())
-            C = C_ // self.scale2
-            H = H_ * self.scale
-            W = W_ * self.scale
-
-            inv_weights = inv_weights.repeat(C, 1, 1, 1)
-
-            x = x.reshape(B, self.scale2, C, H_, W_)
-            x = torch.transpose(x, 1, 2)
-            x = x.reshape(B, C_, H_, W_)
-
-            out = F.conv2d(x, inv_weights, bias=None, stride=1, groups=C)
-
-            out = out.reshape(B, C, self.scale, self.scale, H_, W_)
-            out = out.permute(0, 1, 4, 2, 5, 3)
-            out = out.reshape(B, C, H, W)
-
-            return out
-
-
-
 class InvSRNet(nn.Module):
-    def __init__(self, block_type, channel_in=3, channel_out=3, subnet_constructor=None, block_num=[], upscale_log=2, use_ConvDownsampling=False, use_Conv1x1=False, shuffle_stage1=False):
+    def __init__(self, channel_in=3, channel_out=3, subnet_constructor=None, block_num=[], down_num=2):
         super(InvSRNet, self).__init__()
-        self.upscale_log = upscale_log
 
         operations = []
 
-        channel_split_num1 = channel_in // 2
-        for i in range(block_num[0]):
-            if block_type == 'InvBlock':
-                b = InvBlock(subnet_constructor, channel_in, channel_split_num1)
-            elif block_type == 'InvBlockExp':
-                b = InvBlockExp(subnet_constructor, channel_in, channel_split_num1)
-            elif block_type == 'InvBlockExp2':
-                b = InvBlockExp2(subnet_constructor, channel_in, channel_split_num1)
-            else:
-                print("Error! Undefined block type!")
-                exit(1)
-            operations.append(b)
-            if shuffle_stage1:
-                if i != block_num[0] - 1 or block_num[0] % 2 == 0:
-                    if i % 2 == 0:
-                        operations.append(ShuffleChannel(channel_in, channel_split_num1))
-                    else:
-                        operations.append(ShuffleChannel(channel_in, channel_in - channel_split_num1))
-
         current_channel = channel_in
-        for i in range(upscale_log):
-            if use_Conv1x1:
-                b = Conv1x1(current_channel)
-                operations.append(b)
-            if use_ConvDownsampling:
-                b = ConvDownsampling(2)
-            else:
-                b = HaarDownsampling(current_channel)
+        for i in range(down_num):
+            b = HaarDownsampling(current_channel)
             operations.append(b)
             current_channel *= 4
-            for j in range(block_num[i + 1]):
-                if block_type == 'InvBlock':
-                    b = InvBlock(subnet_constructor, current_channel, channel_out)
-                elif block_type == 'InvBlockExp':
-                    b = InvBlockExp(subnet_constructor, current_channel, channel_out)
-                elif block_type == 'InvBlockExp2':
-                    b = InvBlockExp2(subnet_constructor, current_channel, channel_out)
-                else:
-                    print("Error! Undefined block type!")
-                    exit(1)
+            for j in range(block_num[i]):
+                b = InvBlockExp(subnet_constructor, current_channel, channel_out)
                 operations.append(b)
-
-        if use_Conv1x1:
-            b = Conv1x1(current_channel)
-            operations.append(b)
-
 
         self.operations = nn.ModuleList(operations)
 
@@ -339,100 +121,3 @@ class InvSRNet(nn.Module):
         else:
             return out
 
-
-class InvHSRNet(nn.Module):
-    def __init__(self, block_type, channel_in=3, channel_out=3, subnet_constructor=None, block_num=[], upscale_log=2, shuffle_stage1=False):
-        super(InvHSRNet, self).__init__()
-        self.upscale_log = upscale_log
-
-        operations = []
-
-        #channel_split_num1 = channel_in // 2
-        #for i in range(block_num[0]):
-        #    if block_type == 'InvBlock':
-        #        b = InvBlock(subnet_constructor, channel_in, channel_split_num1)
-        #    elif block_type == 'InvBlockExp':
-        #        b = InvBlockExp(subnet_constructor, channel_in, channel_split_num1)
-        #    elif block_type == 'InvBlockExp2':
-        #        b = InvBlockExp2(subnet_constructor, channel_in, channel_split_num1)
-        #    else:
-        #        print("Error! Undefined block type!")
-        #        exit(1)
-        #    operations.append(b)
-        #    if shuffle_stage1:
-        #        if i != block_num[0] - 1 or block_num[0] % 2 == 0:
-        #            if i % 2 == 0:
-        #                operations.append(ShuffleChannel(channel_in, channel_split_num1))
-        #            else:
-        #                operations.append(ShuffleChannel(channel_in, channel_in - channel_split_num1))
-
-        current_channel = channel_in
-        for i in range(upscale_log):
-            b = HaarDownsampling(current_channel)
-            operations.append(b)
-            current_channel *= 4
-            for j in range(block_num[i]):
-                if block_type == 'InvBlock':
-                    b = InvBlock(subnet_constructor, current_channel, channel_out)
-                elif block_type == 'InvBlockExp':
-                    b = InvBlockExp(subnet_constructor, current_channel, channel_out)
-                elif block_type == 'InvBlockExp2':
-                    b = InvBlockExp2(subnet_constructor, current_channel, channel_out)
-                else:
-                    print("Error! Undefined block type!")
-                    exit(1)
-                operations.append(b)
-            current_channel = channel_in
-
-        self.operations = nn.ModuleList(operations)
-
-        self.block_num = block_num
-        self.upscale_log = upscale_log
-
-    # if rev, x contains latent z1, z2 ... zn, LR, output contains LR_n-1, ..., LR1, HR
-    # else x contains HR, output contains [LR1, z1], [LR2, z2], ... [LR, zn]
-    # if multi_reconstruction (rev), x contains z1, z2, ..., zn, [LR1, ..., LR_n-1, LR], output contains LR_n-1, ..., LR1, [HR, HR(by LR_n-1), ...]
-    def forward(self, x, rev=False, multi_reconstruction=False):
-        xx = x[-1]
-        out = []
-
-        if not rev:
-            scnt = 0
-            for cnt in range(self.upscale_log):
-                bcnt = self.block_num[cnt] + 1
-                for i in range(bcnt):
-                    xx = self.operations[scnt + i].forward(xx, rev)
-                out.append(xx)
-                xx = xx[:, :3, :, :]
-                scnt += bcnt
-        else:
-            if not multi_reconstruction:
-                scnt = len(self.operations) - (self.block_num[-1] + 1)
-                for cnt in reversed(range(self.upscale_log)):
-                    bcnt = self.block_num[cnt] + 1
-                    xx = torch.cat((xx, x[cnt]), 1)
-                    for i in reversed(range(bcnt)):
-                        xx = self.operations[scnt + i].forward(xx, rev)
-                    out.append(xx)
-                    scnt -= bcnt
-                out.append(xx)
-            else:
-                HR_set = []
-                LRs = xx
-                sscnt = len(self.operations) - (self.block_num[-1] + 1)
-                for LR_start in reversed(range(self.upscale_log)):
-                    xx = LRs[LR_start]
-                    scnt = sscnt
-                    for cnt in reversed(range(LR_start + 1)):
-                        bcnt = self.block_num[cnt] + 1
-                        xx = torch.cat((xx, x[cnt]), 1)
-                        for i in reversed(range(bcnt)):
-                            xx = self.operations[scnt + i].forward(xx, rev)
-                        if LR_start == self.upscale_log - 1:
-                            out.append(xx)
-                        scnt -= bcnt
-                    HR_set.append(xx)
-                    sscnt -= self.block_num[LR_start] + 1
-                out.append(HR_set)
-
-        return out
