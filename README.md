@@ -1,5 +1,5 @@
 # Invertible Image Rescaling
-This is the PyTorch implementation of paper: [Invertible Image Rescaling](https://arxiv.org/abs/2005.05650).
+This is the PyTorch implementation of paper: Invertible Image Rescaling (ECCV 2020 oral). [arxiv](https://arxiv.org/abs/2005.05650).
 
 ## Dependencies and Installation
 - Python 3 (Recommend to use [Anaconda](https://www.anaconda.com/download/#linux))
@@ -26,7 +26,7 @@ First set a config file in options/test/, then execute as following:
 
 	python test.py -opt options/test/test_IRN_x4.yml
 
-Pretrained models can be downloaded from [here](https://drive.google.com/drive/folders/1K-DmWU7fO5Rf6EOmeW-8WEmhQQmX1pn7?usp=sharing).
+Pretrained models can be downloaded from [Google Drive](https://drive.google.com/drive/folders/1K-DmWU7fO5Rf6EOmeW-8WEmhQQmX1pn7?usp=sharing) or [Baidu Netdisk](https://pan.baidu.com/s/1U38SjqVlqY5YVMsSFrkTsw) (extraction code: lukj).
 
 ## Acknowledgement
 The code is based on [BasicSR](https://github.com/xinntao/BasicSR), with reference of [FrEIA](https://github.com/VLL-HD/FrEIA).
