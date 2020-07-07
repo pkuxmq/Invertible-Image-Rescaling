@@ -10,28 +10,28 @@ datasets:
   test_1:  # the 1st test dataset
     name: set5
     mode: LQGT
-    dataroot_GT: /home/mingqing/data/Set5/HR
-    dataroot_LQ: /home/mingqing/data/Set5/LR_x2
+    dataroot_GT: ~ # path to test HR images
+    dataroot_LQ: ~ # path to test reference LR images, not necessary, if not provided, LR images will be generated in dataloader
   test_2:  # the 2st test dataset
     name: set14
     mode: LQGT
-    dataroot_GT: /home/mingqing/data/Set14/HR
-    dataroot_LQ: /home/mingqing/data/Set14/LR_x2
+    dataroot_GT: ~ # path to test HR images
+    dataroot_LQ: ~ # path to test reference LR images, not necessary, if not provided, LR images will be generated in dataloader
   test_3:  # the 3st test dataset
     name: B100
     mode: LQGT
-    dataroot_GT: /home/mingqing/data/B100/HR
-    dataroot_LQ: /home/mingqing/data/B100/LR_x2
+    dataroot_GT: ~ # path to test HR images
+    dataroot_LQ: ~ # path to test reference LR images, not necessary, if not provided, LR images will be generated in dataloader
   test_4:  # the 3st test dataset
     name: Urban100
     mode: LQGT
-    dataroot_GT: /home/mingqing/data/Urban100/HR
-    dataroot_LQ: /home/mingqing/data/Urban100/LR_x2
+    dataroot_GT: ~ # path to test HR images
+    dataroot_LQ: ~ # path to test reference LR images, not necessary, if not provided, LR images will be generated in dataloader
   test_5:
     name: val_DIV2K
     mode: LQGT
-    dataroot_GT: /home/shuxin/data/DIV2K/DIV2K_valid_HR.lmdb
-    dataroot_LQ: /home/shuxin/data/DIV2K/DIV2K_valid_LR_bicubic/X2.lmdb
+    dataroot_GT: ~ # path to test HR images
+    dataroot_LQ: ~ # path to test reference LR images, not necessary, if not provided, LR images will be generated in dataloader
 
 
 #### network
