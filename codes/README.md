@@ -1,14 +1,14 @@
 # Training
-First set a config file in options/train/, then execute as following:
+First set a config file in options/train/, then run as following:
 
 	python train.py -opt options/train/train_IRN_x4.yml
 
 # Test
-First set a config file in options/test/, then execute as following:
+First set a config file in options/test/, then run as following:
 
 	python test.py -opt options/test/test_IRN_x4.yml
 
-Pretrained models can be downloaded from [Google Drive](https://drive.google.com/drive/folders/1K-DmWU7fO5Rf6EOmeW-8WEmhQQmX1pn7?usp=sharing) or [Baidu Netdisk](https://pan.baidu.com/s/1U38SjqVlqY5YVMsSFrkTsw) (extraction code: lukj).
+Pretrained models can be downloaded from [Google Drive](https://drive.google.com/drive/folders/1K-DmWU7fO5Rf6EOmeW-8WEmhQQmX1pn7?usp=sharing) or [Baidu Drive](https://pan.baidu.com/s/1U38SjqVlqY5YVMsSFrkTsw) (extraction code: lukj).
 
 # Code Framework
 The code framework follows [BasicSR](https://github.com/xinntao/BasicSR/tree/master/codes). It mainly consists of four parts - `Config`, `Data`, `Model` and `Network`.
