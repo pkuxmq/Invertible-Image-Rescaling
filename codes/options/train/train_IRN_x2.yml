@@ -15,8 +15,8 @@ datasets:
   train:
     name: DIV2K
     mode: LQGT
-    dataroot_GT: /home/shuxin/data/DIV2K/DIV2K_train_HR.lmdb
-    dataroot_LQ: /home/shuxin/data/DIV2K/DIV2K_train_LR_bicubic/X2.lmdb
+    dataroot_GT: ~ # path to training HR images
+    dataroot_LQ: ~ # path to training reference LR images, not necessary, if not provided, LR images will be generated in dataloader
 
     use_shuffle: true
     n_workers: 6  # per GPU
@@ -29,8 +29,8 @@ datasets:
   val:
     name: val_DIV2K
     mode: LQGT
-    dataroot_GT: /home/shuxin/data/DIV2K/DIV2K_valid_HR.lmdb
-    dataroot_LQ: /home/shuxin/data/DIV2K/DIV2K_valid_LR_bicubic/X2.lmdb
+    dataroot_GT: ~ # path to validation HR images
+    dataroot_LQ: ~ # path to validation reference LR images, not necessary, if not provided, LR images will be generated in dataloader
 
 
 #### network structures

@@ -177,7 +177,6 @@ def main():
             # validation
             if current_step % opt['train']['val_freq'] == 0 and rank <= 0:
                 avg_psnr = 0.0
-                avg_psnr_forw = 0.0
                 idx = 0
                 for val_data in val_loader:
                     idx += 1
@@ -223,9 +222,9 @@ def main():
                 avg_psnr = avg_psnr / idx
 
                 # log
-                logger.info('# Validation # PSNR: {:.4e}'.format(avg_psnr))
+                logger.info('# Validation # PSNR: {:.4e}.'.format(avg_psnr))
                 logger_val = logging.getLogger('val')  # validation logger
-                logger_val.info('<epoch:{:3d}, iter:{:8,d}> psnr: {:.4e}'.format(
+                logger_val.info('<epoch:{:3d}, iter:{:8,d}> psnr: {:.4e}.'.format(
                     epoch, current_step, avg_psnr))
                 # tensorboard logger
                 if opt['use_tb_logger'] and 'debug' not in opt['name']:

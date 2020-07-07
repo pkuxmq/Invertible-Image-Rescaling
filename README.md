@@ -11,10 +11,25 @@ This is the PyTorch implementation of paper: [Invertible Image Rescaling](https:
   - PyTorch == 1.0: `pip install tensorboardX`
   
 ## Dataset Preparation
-We use datasets in LDMB format for faster IO speed. Please refer to [wiki](https://github.com/xinntao/BasicSR/wiki/Prepare-datasets-in-LMDB-format) for more details.
+Commonly used training and testing datasets can be downloaded [here](https://github.com/xinntao/BasicSR/wiki/Prepare-datasets-in-LMDB-format).
 
 ## Get Started
-Please see [wiki](https://github.com/xinntao/BasicSR/wiki/Training-and-Testing) for the basic usage, *i.e.,* training and testing.
+Execution codes are in ['codes/'](https://github.com/mingqing/Invertible-Image-Rescaling/tree/master/codes/options).
 
-## Model Zoo and Baselines
-Results and pre-trained models are available in the [wiki-Model zoo](https://github.com/xinntao/BasicSR/wiki/Model-Zoo).
+### Training
+First set a config file in options/train/, then execute as following:
+
+	python train.py -opt options/train/train_IRN_x4.yml
+
+### Test
+First set a config file in options/test/, then execute as following:
+
+	python test.py -opt options/test/test_IRN_x4.yml
+
+Pretrained models can be downloaded from [here](https://drive.google.com/drive/folders/1K-DmWU7fO5Rf6EOmeW-8WEmhQQmX1pn7?usp=sharing).
+
+## Acknowledgement
+The code is based on [BasicSR](https://github.com/xinntao/BasicSR), with reference of [FrEIA](https://github.com/VLL-HD/FrEIA).
+
+## Contact
+If you have any questions, please contact <mingqing_xiao@pku.edu.cn>.
