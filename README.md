@@ -14,7 +14,16 @@ This is the PyTorch implementation of paper: Invertible Image Rescaling (ECCV 20
 Commonly used training and testing datasets can be downloaded [here](https://github.com/xinntao/BasicSR/wiki/Prepare-datasets-in-LMDB-format).
 
 ## Get Started
-Please see ['here'] for basic usages, i.e., training and testing.
+Training and testing codes are in ['codes/'](./codes/). Please see ['codes/README.md'](./codes/README.md) for basic usages.
+
+## Invertible Architecture
+![Invertible Architecture](./figures/architecture.pdf)
+
+## Quantitative Results
+![](./figures/quantitative_results.jpg)
+
+## Quanlitative Results
+![Qualitative results of upscaling the 4x downscaled images](./figures/figure_qualitative.pdf)
 
 ## Acknowledgement
 The code is based on [BasicSR](https://github.com/xinntao/BasicSR), with reference of [FrEIA](https://github.com/VLL-HD/FrEIA).
