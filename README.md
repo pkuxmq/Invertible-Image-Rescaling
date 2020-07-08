@@ -14,19 +14,7 @@ This is the PyTorch implementation of paper: Invertible Image Rescaling (ECCV 20
 Commonly used training and testing datasets can be downloaded [here](https://github.com/xinntao/BasicSR/wiki/Prepare-datasets-in-LMDB-format).
 
 ## Get Started
-Training and testing codes are in ['codes/'](https://github.com/mingqing/Invertible-Image-Rescaling/tree/master/codes/options).
-
-### Training
-First set a config file in options/train/, then run as following:
-
-	python train.py -opt options/train/train_IRN_x4.yml
-
-### Test
-First set a config file in options/test/, then run as following:
-
-	python test.py -opt options/test/test_IRN_x4.yml
-
-Pretrained models can be downloaded from [Google Drive](https://drive.google.com/drive/folders/1K-DmWU7fO5Rf6EOmeW-8WEmhQQmX1pn7?usp=sharing) or [Baidu Drive](https://pan.baidu.com/s/1U38SjqVlqY5YVMsSFrkTsw) (extraction code: lukj).
+Please see ['here'] for basic usages, i.e., training and testing.
 
 ## Acknowledgement
 The code is based on [BasicSR](https://github.com/xinntao/BasicSR), with reference of [FrEIA](https://github.com/VLL-HD/FrEIA).
