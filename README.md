@@ -23,7 +23,8 @@ Training and testing codes are in ['codes/'](./codes/). Please see ['codes/READM
 ![Quantitative Results](./figures/quantitative_results.jpg)
 
 ## Qualitative Results
-![Qualitative results of upscaling the 4x downscaled images](./figures/qualitative_results.jpg)
+![Qualitative Results](./figures/qualitative_results.jpg)
+Qualitative results of upscaling the 4x downscaled images.
 
 ## Acknowledgement
 The code is based on [BasicSR](https://github.com/xinntao/BasicSR), with reference of [FrEIA](https://github.com/VLL-HD/FrEIA).
