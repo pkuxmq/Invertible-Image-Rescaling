@@ -17,13 +17,13 @@ Commonly used training and testing datasets can be downloaded [here](https://git
 Training and testing codes are in ['codes/'](./codes/). Please see ['codes/README.md'](./codes/README.md) for basic usages.
 
 ## Invertible Architecture
-![Invertible Architecture](./figures/architecture.pdf)
+![Invertible Architecture](./figures/architecture.jpg)
 
 ## Quantitative Results
-![](./figures/quantitative_results.jpg)
+![Quantitative Results](./figures/quantitative_results.jpg)
 
-## Quanlitative Results
-![Qualitative results of upscaling the 4x downscaled images](./figures/figure_qualitative.pdf)
+## Qualitative Results
+![Qualitative results of upscaling the 4x downscaled images](./figures/qualitative_results.jpg)
 
 ## Acknowledgement
 The code is based on [BasicSR](https://github.com/xinntao/BasicSR), with reference of [FrEIA](https://github.com/VLL-HD/FrEIA).
