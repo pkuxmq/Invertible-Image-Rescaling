@@ -17,19 +17,9 @@ import torch
 import torchvision.transforms as transforms
 from PIL import Image
 from tqdm import tqdm
-from data import gaussian_batch, zeroshot_data
-from model import enable_amp, get_model, model_device, model_load, train_epoch, L1Loss
+from data import gaussian_batch
+from model import enable_amp, get_model, model_device, model_load, train_epoch, L1Loss, Quantization, zeroshot_train
 
-import torch.optim as optim
-
-def zeroshot_train(model, scale, image_file_name):
-    params = [p for p in model.parameters() if p.requires_grad]
-    optimizer = optim.SGD(params, lr=1e-4, momentum=0.9, weight_decay=0.0005)
-    lr_scheduler = optim.lr_scheduler.StepLR(optimizer, step_size=100, gamma=0.1)
-    device = model_device()
-    dl = zeroshot_data(filename)
-    for epoch in range(100):
-        train_epoch(dl, model, optimizer, device, scale, tag='train')
 
 if __name__ == "__main__":
     """Predict."""
@@ -54,7 +44,7 @@ if __name__ == "__main__":
     model.to(device)
     model.eval()
 
-    enable_amp(model)
+    # enable_amp(model)
 
     totensor = transforms.ToTensor()
     toimage = transforms.ToPILImage()
@@ -65,7 +55,7 @@ if __name__ == "__main__":
     for index, filename in enumerate(image_filenames):
         progress_bar.update(1)
 
-        # zeroshot_train(model, args.scale, filename)
+        zeroshot_train(model, args.scale, filename)
         image = Image.open(filename).convert("RGB")
         input_tensor = totensor(image).unsqueeze(0).to(device)
 
@@ -78,6 +68,7 @@ if __name__ == "__main__":
                 y_forw = torch.cat((input_tensor, gaussian_batch(zshape).to(device)), dim=1)
                 output_tensor = model(x=y_forw, rev=True)[:, :3, :, :]
                 LR_fake = model(x=output_tensor)[:, :3, :, :]
+                LR_fake = Quantization()(LR_fake)
                 loss = L1Loss()(input_tensor, LR_fake).item()
                 if (loss > best_loss):
                     best_loss = loss

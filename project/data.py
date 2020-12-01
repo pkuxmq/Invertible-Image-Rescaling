@@ -96,23 +96,21 @@ class ZeroShotImageZoomDataset(data.Dataset):
     def __init__(self, image_file_name, transforms=get_transform()):
         """Init dataset."""
         super(ZeroShotImageZoomDataset, self).__init__()
-        self.transforms = transforms
         self.image_file_name = image_file_name
+        self.transforms = transforms
+        image = Image.open(image_file_name).convert("RGB")
+        self.hr = self.transforms(image)
+        W, H = image.size
+        image = image.resize((W//4, H//4), Image.ANTIALIAS)
+        self.lr = self.transforms(image)
 
     def __getitem__(self, idx):
         """Load images."""
-        hr = Image.open(self.image_file_name).convert("RGB")
-        W, H = hr.size
-        lr = hr.resize((W//4, H//4), Image.ANTIALIAS)
-        if self.transforms is not None:
-            hr = self.transforms(hr)
-            lr = self.transforms(lr)
-        lr, hr = random_crop(lr, hr)
-        return lr, hr
+        return random_crop(self.lr, self.hr)
 
     def __len__(self):
         """Return total numbers of images."""
-        return 1
+        return 1000
 
     def __repr__(self):
         """
@@ -120,17 +118,17 @@ class ZeroShotImageZoomDataset(data.Dataset):
         """
         fmt_str = 'Dataset ' + self.__class__.__name__ + '\n'
         fmt_str += '    Number of samples: {}\n'.format(self.__len__())
-        fmt_str += '    Image File Name: {}\n'.format(self.image_file_name)
+        fmt_str += '    Image File: {}\n'.format(self.image_file_name)
         tmp = '    Transforms: '
         fmt_str += '{0}{1}\n'.format(
             tmp, self.transforms.__repr__().replace('\n', '\n' + ' ' * len(tmp)))
         return fmt_str
 
-def zeroshot_data(file_name):
+def zeroshot_data(file_name, bs):
     """Get data loader for trainning & validating, bs means batch_size."""
     ds = ZeroShotImageZoomDataset(file_name, get_transform(train=True))
     # Define training and validation data loaders
-    dl = data.DataLoader(ds, batch_size=1, shuffle=True, num_workers=0)
+    dl = data.DataLoader(ds, batch_size=bs, shuffle=True, num_workers=4)
     return dl
 
 def train_data(bs):

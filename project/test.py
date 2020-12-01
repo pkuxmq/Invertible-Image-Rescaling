@@ -11,14 +11,15 @@
 #
 import argparse
 import os
-
+import logging
 import torch
-
 from data import get_data
 from model import enable_amp, get_model, model_device, model_load, valid_epoch
 
 if __name__ == "__main__":
     """Test model."""
+    logging.basicConfig(filename='/tmp/test.log', 
+        format='%(asctime)s - %(levelname)s - %(message)s',level=logging.INFO)
 
     parser = argparse.ArgumentParser()
     parser.add_argument('--checkpoint', type=str,

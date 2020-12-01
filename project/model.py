@@ -14,6 +14,7 @@ import math
 import os
 import pdb
 import sys
+import logging
 
 import torch
 import torch.nn as nn
@@ -21,8 +22,15 @@ import torch.nn.functional as F
 from apex import amp
 # from torch.utils.checkpoint import checkpoint_sequential
 from tqdm import tqdm
-from model_helper import ImageZoomModel
-from data import gaussian_batch
+from model_helper import ImageZoomModel, Quantization
+import torch.optim as optim
+from ssim import SSIM as TorchSSIM
+
+from data import gaussian_batch, zeroshot_data
+
+logging.basicConfig(filename='/tmp/model.log', 
+        format='%(asctime)s - %(levelname)s - %(message)s',level=logging.INFO)
+
 
 def PSNR(img1, img2):
     """PSNR."""
@@ -43,7 +51,6 @@ def model_load(model, path):
             target_state_dict[n].copy_(p)
         else:
             raise KeyError(n)
-
 
 def model_save(model, path):
     """Save model."""
@@ -185,6 +192,8 @@ def train_epoch(loader, model, optimizer, device, scale, tag=''):
     forward_loss = L2Loss()
     backward_loss = L1Loss()
 
+    logging.info("Start train_epoch")
+
     with tqdm(total=len(loader.dataset)) as t:
         t.set_description(tag)
 
@@ -249,6 +258,9 @@ def train_epoch(loader, model, optimizer, device, scale, tag=''):
             nn.utils.clip_grad_norm_(model.parameters(), 10.0)
             optimizer.step()
 
+        logging.info("Total loss: {:.6f}".format(total_loss.avg))
+        logging.info("Stop train_epoch")
+
         return total_loss.avg
 
 
@@ -257,8 +269,10 @@ def valid_epoch(loader, model, device, scale, tag=''):
 
     valid_lr_loss = Counter()
     valid_hr_loss = Counter()
+    SSIM = TorchSSIM()
 
     model.eval()
+    logging.info("Start valid_epoch")
 
     with tqdm(total=len(loader.dataset)) as t:
         t.set_description(tag)
@@ -284,11 +298,27 @@ def valid_epoch(loader, model, device, scale, tag=''):
 
             valid_lr_loss.update(psnr_lr.item(), count)
             valid_hr_loss.update(psnr_hr.item(), count)
-            t.set_postfix(loss='LR PSNR: {:.6f}, HR PSNR: {:.6f}'.format(valid_lr_loss.avg, valid_hr_loss.avg))
+            t.set_postfix(loss='LR/HR PSNR: {:.6f}, {:.6f}'.format(valid_lr_loss.avg, valid_hr_loss.avg))
             t.update(count)
+
+            ssim_lr = SSIM(forw_L, LR)
+            ssim_hr = SSIM(HR, predicts)
+            logging.info("LR/HR PSNR: {:.2f}, {:.2f} LR/HR SSIM: {:.2f}, {:.2f}".format(psnr_lr.item(), psnr_hr.item(), ssim_lr.item(), ssim_hr.item()))
 
             del LR, HR, forw_L, y_forw, predicts, psnr_lr, psnr_hr
             torch.cuda.empty_cache()
+
+    logging.info("Stop valid_epoch")
+
+def zeroshot_train(model, scale, image_file_name):
+    params = [p for p in model.parameters() if p.requires_grad]
+    optimizer = optim.SGD(params, lr=1e-4, momentum=0.9, weight_decay=0.0005)
+    lr_scheduler = optim.lr_scheduler.StepLR(optimizer, step_size=100, gamma=0.1)
+    device = model_device()
+    dl = zeroshot_data(image_file_name, bs=3)
+    for epoch in range(1):
+        train_epoch(dl, model, optimizer, device, scale, tag='train')
+
 
 def model_device():
     """First call model_setenv. """
