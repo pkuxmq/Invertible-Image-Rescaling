@@ -9,25 +9,26 @@
 # ***
 # ************************************************************************************/
 #
-import os
 import argparse
+import os
+
 import torch
+
 from data import get_data
-from model import get_model, model_load, valid_epoch, enable_amp, model_device
+from model import enable_amp, get_model, model_device, model_load, valid_epoch
 
 if __name__ == "__main__":
     """Test model."""
 
     parser = argparse.ArgumentParser()
-    parser.add_argument('--checkpoint', type=str, default="output/ImageZoomB.pth", help="checkpoint file")
-    parser.add_argument('--bs', type=int, default=2, help="batch size")
+    parser.add_argument('--checkpoint', type=str,
+                        default="models/ImageZoom.pth", help="checkpoint file")
+    parser.add_argument('--bs', type=int, default=1, help="batch size")
     args = parser.parse_args()
 
     # get model
     model = get_model()
     model_load(model, args.checkpoint)
-
-    # CPU or GPU ?
     device = model_device()
     model.to(device)
 

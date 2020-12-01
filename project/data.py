@@ -1,78 +1,77 @@
-"""Data loader."""# coding=utf-8
+"""Data loader."""
+# coding=utf-8
 #
 # /************************************************************************************
 # ***
 # ***    Copyright Dell 2020, All Rights Reserved.
 # ***
-# ***    File Author: Dell, 2020年 11月 30日 星期一 22:50:05 CST
+# ***    File Author: Dell, 2020年 11月 02日 星期一 17:48:28 CST
 # ***
 # ************************************************************************************/
 #
-
 import os
-import math
+import random
+
 import torch
-from PIL import Image
 import torch.utils.data as data
 import torchvision.transforms as T
 import torchvision.utils as utils
+from PIL import Image
 
-# xxxx--modify here
 train_dataset_rootdir = "dataset/train/"
 test_dataset_rootdir = "dataset/test/"
-
-def multiple_crop(data, multiple=32):
-    # Crop image to a multiple
-    C, H, W = data.shape
-    Hnew = int(H/multiple)*multiple
-    Wnew = int(W/multiple)*multiple
-    h = (H - Hnew)//2
-    w = (W - Wnew)//2
-    return data[:, h:h+Hnew, w:w+Wnew]
-
-
-def multiple_scale(data, multiple=32):
-    # Scale image to a multiple
-    C, H, W = data.shape
-    Hnew = int(multiple * math.ceil(H/multiple))
-    Wnew = int(multiple * math.ceil(W/multiple))
-    temp = data.new_zeros(C, Hnew, Wnew)
-    temp[:, 0:H, 0:W] = data
-    return temp
 
 
 def get_transform(train=True):
     """Transform images."""
+
     ts = []
     # if train:
-    #     ts.append(T.RandomHorizontalFlip(0.5))
-
+    #     # ts.append(T.RandomHorizontalFlip(0.5))
+    #     PATH_SIZE=(256, 256)
+    #     ts.append(T.RandomCrop(PATH_SIZE))
     ts.append(T.ToTensor())
     return T.Compose(ts)
 
-class ImageZoomBDataset(data.Dataset):
+
+def random_crop(LR, HR):
+    # Patch Size
+    PATCH_SIZE = 128
+    H, W = LR.shape[1:]
+    h = random.randint(0, H - PATCH_SIZE)
+    w = random.randint(0, W - PATCH_SIZE)
+    return LR[:, h:h+PATCH_SIZE, w:w+PATCH_SIZE], HR[:, 4*h:4*(h+PATCH_SIZE), 4*w:4*(w+PATCH_SIZE)]
+
+
+class ImageZoomDataset(data.Dataset):
     """Define dataset."""
 
-    def __init__(self, root, transforms=get_transform()):
+    def __init__(self, root, trainning, transforms=get_transform()):
         """Init dataset."""
-        super(ImageZoomBDataset, self).__init__()
+        super(ImageZoomDataset, self).__init__()
+        self.trainning = trainning
 
         self.root = root
         self.transforms = transforms
 
         # load all images, sorting for alignment
-        # xxxx--modify here
-        self.images = list(sorted(os.listdir(root)))
+        self.images = list(sorted(os.listdir(root + "/LR")))
 
     def __getitem__(self, idx):
         """Load images."""
-        img_path = os.path.join(self.root, self.images[idx])
-        img = Image.open(img_path).convert("RGB")
+        img_path = os.path.join(self.root + "/LR", self.images[idx])
+        lr = Image.open(img_path).convert("RGB")
 
+        img_path = os.path.join(self.root + "/HR", self.images[idx])
+        hr = Image.open(img_path).convert("RGB")
         if self.transforms is not None:
-            img = self.transforms(img)
+            lr = self.transforms(lr)
+            hr = self.transforms(hr)
 
-        return img
+        if self.trainning:
+            lr, hr = random_crop(lr, hr)
+
+        return lr, hr
 
     def __len__(self):
         """Return total numbers of images."""
@@ -86,17 +85,19 @@ class ImageZoomBDataset(data.Dataset):
         fmt_str += '    Number of samples: {}\n'.format(self.__len__())
         fmt_str += '    Root Location: {}\n'.format(self.root)
         tmp = '    Transforms: '
-        fmt_str += '{0}{1}\n'.format(tmp, self.transforms.__repr__().replace('\n', '\n' + ' ' * len(tmp)))
+        fmt_str += '{0}{1}\n'.format(
+            tmp, self.transforms.__repr__().replace('\n', '\n' + ' ' * len(tmp)))
         return fmt_str
+
 
 def train_data(bs):
     """Get data loader for trainning & validating, bs means batch_size."""
 
-    train_ds = ImageZoomBDataset(train_dataset_rootdir, get_transform(train=True))
+    train_ds = ImageZoomDataset(
+        train_dataset_rootdir, True, get_transform(train=True))
     print(train_ds)
 
     # Split train_ds in train and valid set
-    # xxxx--modify here
     valid_len = int(0.2 * len(train_ds))
     indices = [i for i in range(len(train_ds) - valid_len, len(train_ds))]
 
@@ -105,16 +106,21 @@ def train_data(bs):
     train_ds = data.Subset(train_ds, indices)
 
     # Define training and validation data loaders
-    train_dl = data.DataLoader(train_ds, batch_size=bs, shuffle=True, num_workers=4)
-    valid_dl = data.DataLoader(valid_ds, batch_size=bs, shuffle=False, num_workers=4)
+    train_dl = data.DataLoader(
+        train_ds, batch_size=bs, shuffle=True, num_workers=4)
+    valid_dl = data.DataLoader(
+        valid_ds, batch_size=bs, shuffle=False, num_workers=4)
 
     return train_dl, valid_dl
+
 
 def test_data(bs):
     """Get data loader for test, bs means batch_size."""
 
-    test_ds = ImageZoomBDataset(test_dataset_rootdir, get_transform(train=False))
-    test_dl = data.DataLoader(test_ds, batch_size=bs, shuffle=False, num_workers=4)
+    test_ds = ImageZoomDataset(
+        test_dataset_rootdir, False, get_transform(train=False))
+    test_dl = data.DataLoader(
+        test_ds, batch_size=bs, shuffle=False, num_workers=4)
 
     return test_dl
 
@@ -124,10 +130,11 @@ def get_data(trainning=True, bs=4):
 
     return train_data(bs) if trainning else test_data(bs)
 
-def ImageZoomBDatasetTest():
+
+def ImageZoomDatasetTest():
     """Test dataset ..."""
 
-    ds = ImageZoomBDataset(train_dataset_rootdir)
+    ds = ImageZoomDataset(train_dataset_rootdir, True)
     print(ds)
     # src, tgt = ds[10]
     # grid = utils.make_grid(torch.cat([src.unsqueeze(0), tgt.unsqueeze(0)], dim=0), nrow=2)
@@ -135,5 +142,9 @@ def ImageZoomBDatasetTest():
     # image = Image.fromarray(ndarr)
     # image.show()
 
+
+def gaussian_batch(dims):
+    return torch.randn(tuple(dims))
+
 if __name__ == '__main__':
-    ImageZoomBDatasetTest()
+    ImageZoomDatasetTest()

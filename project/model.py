@@ -9,23 +9,19 @@
 # ************************************************************************************/
 #
 
-import os
-import sys
+import functools
 import math
+import os
+import pdb
+import sys
+
 import torch
 import torch.nn as nn
+import torch.nn.functional as F
+from apex import amp
+from torch.utils.checkpoint import checkpoint_sequential
 from tqdm import tqdm
-
-class ImageZoomBModel(nn.Module):
-    """ImageZoomB Model."""
-
-    def __init__(self):
-        """Init model."""
-        super(ImageZoomBModel, self).__init__()
-
-    def forward(self, x):
-        """Forward."""
-        return x
+from model_helper import ImageZoomModel
 
 def model_load(model, path):
     """Load model."""
@@ -52,8 +48,8 @@ def export_onnx_model():
     import onnx
     from onnx import optimizer
 
-    onnx_file = "output/model.onnx"
-    weight_file = "output/model.pth"
+    onnx_file = "models/image_zoom.onnx"
+    weight_file = "models/ImageZoom.pth"
 
     # 1. Load model
     print("Loading model ...")
@@ -66,10 +62,9 @@ def export_onnx_model():
     dummy_input = torch.randn(1, 3, 512, 512)
 
     input_names = ["input"]
-    output_names = ["noise_level", "output"]
+    output_names = ["output"]
     # variable lenght axes
     dynamic_axes = {'input': {0: 'batch_size', 1: 'channel', 2: "height", 3: 'width'},
-                    'noise_level': {0: 'batch_size', 1: 'channel', 2: "height", 3: 'width'},
                     'output': {0: 'batch_size', 1: 'channel', 2: "height", 3: 'width'}}
     torch.onnx.export(model, dummy_input, onnx_file,
                       input_names=input_names,
@@ -98,8 +93,8 @@ def export_onnx_model():
 def export_torch_model():
     """Export torch model."""
 
-    script_file = "output/model.pt"
-    weight_file = "output/model.pth"
+    script_file = "models/image_zoom.pt"
+    weight_file = "models/ImageZoom.pth"
 
     # 1. Load model
     print("Loading model ...")
@@ -114,10 +109,10 @@ def export_torch_model():
     traced_script_module.save(script_file)
 
 
-def get_model():
+def get_model(scale=4):
     """Create model."""
     model_setenv()
-    model = ImageZoomBModel()
+    model = ImageZoomModel(channel_in=3, channel_out=3, scale=scale)
     return model
 
 
@@ -299,7 +294,7 @@ if __name__ == '__main__':
     model = get_model()
     print(model)
 
-    export_torch_model()
-    export_onnx_model()
+    # export_torch_model()
+    # export_onnx_model()
 
-    infer_perform()
+    # infer_perform()
