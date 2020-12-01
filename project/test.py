@@ -24,7 +24,7 @@ if __name__ == "__main__":
     parser.add_argument('--checkpoint', type=str,
                         default="models/ImageZoom_X4.pth", help="checkpoint file")
     parser.add_argument('--scale', type=int, default=4, help="scale factor")
-    parser.add_argument('--bs', type=int, default=8, help="batch size")
+    parser.add_argument('--bs', type=int, default=1, help="batch size")
     args = parser.parse_args()
 
     if (args.scale == 2):

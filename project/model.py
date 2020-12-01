@@ -246,7 +246,7 @@ def train_epoch(loader, model, optimizer, device, scale, tag=''):
             optimizer.zero_grad()
             loss.backward()
             # Lipschit condition !!!
-            # nn.utils.clip_grad_norm_(model.parameters(), 10.0)
+            nn.utils.clip_grad_norm_(model.parameters(), 10.0)
             optimizer.step()
 
         return total_loss.avg

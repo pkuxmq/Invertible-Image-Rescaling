@@ -18,7 +18,7 @@ import torchvision.transforms as transforms
 from PIL import Image
 from tqdm import tqdm
 from data import gaussian_batch
-from model import enable_amp, get_model, model_device, model_load
+from model import enable_amp, get_model, model_device, model_load, PSNR
 
 if __name__ == "__main__":
     """Predict."""
@@ -51,7 +51,6 @@ if __name__ == "__main__":
     image_filenames = glob.glob(args.input)
     progress_bar = tqdm(total=len(image_filenames))
 
-    gaussian_scale = 1
     for index, filename in enumerate(image_filenames):
         progress_bar.update(1)
 
@@ -61,16 +60,23 @@ if __name__ == "__main__":
         B,C,H,W = input_tensor.size()
         zshape = [B, C * (args.scale**2 - 1), H, W]
 
-        with torch.no_grad():
-            # output_tensor = model(input_tensor)
-            y_forw = torch.cat((input_tensor, gaussian_scale * gaussian_batch(zshape).to(device)), dim=1)
-            output_tensor = model(x=y_forw, rev=True)[:, :3, :, :]
+        best_psnr = 0;
+        for i in range(10):
+            with torch.no_grad():
+                y_forw = torch.cat((input_tensor, gaussian_batch(zshape).to(device)), dim=1)
+                output_tensor = model(x=y_forw, rev=True)[:, :3, :, :]
+                LR_fake = model(x=output_tensor)[:, :3, :, :]
+                psnr = PSNR(input_tensor, LR_fake).item()
+                if (psnr > best_psnr):
+                    best_psnr = psnr
+                    final_output_tensor = output_tensor.cpu()
+        final_output_tensor.clamp_(0, 1.0)
+        final_output_tensor = final_output_tensor.squeeze(0)
 
-        output_tensor.clamp_(0, 1.0)
-        output_tensor = output_tensor.squeeze(0)
-
-        toimage(output_tensor.cpu()).save(
+        toimage(final_output_tensor.cpu()).save(
             "{}/{}".format(args.output, os.path.basename(filename)))
 
-        del input_tensor, output_tensor
+        del input_tensor, output_tensor, final_output_tensor
         torch.cuda.empty_cache()
+
+        progress_bar.set_postfix(PSNR='{:.2f}'.format(best_psnr))
