@@ -17,8 +17,19 @@ import torch
 import torchvision.transforms as transforms
 from PIL import Image
 from tqdm import tqdm
-from data import gaussian_batch
-from model import enable_amp, get_model, model_device, model_load, PSNR
+from data import gaussian_batch, zeroshot_data
+from model import enable_amp, get_model, model_device, model_load, train_epoch, L1Loss
+
+import torch.optim as optim
+
+def zeroshot_train(model, scale, image_file_name):
+    params = [p for p in model.parameters() if p.requires_grad]
+    optimizer = optim.SGD(params, lr=1e-4, momentum=0.9, weight_decay=0.0005)
+    lr_scheduler = optim.lr_scheduler.StepLR(optimizer, step_size=100, gamma=0.1)
+    device = model_device()
+    dl = zeroshot_data(filename)
+    for epoch in range(100):
+        train_epoch(dl, model, optimizer, device, scale, tag='train')
 
 if __name__ == "__main__":
     """Predict."""
@@ -48,27 +59,28 @@ if __name__ == "__main__":
     totensor = transforms.ToTensor()
     toimage = transforms.ToPILImage()
 
-    image_filenames = glob.glob(args.input)
+    image_filenames = sorted(glob.glob(args.input))
     progress_bar = tqdm(total=len(image_filenames))
 
     for index, filename in enumerate(image_filenames):
         progress_bar.update(1)
 
+        # zeroshot_train(model, args.scale, filename)
         image = Image.open(filename).convert("RGB")
         input_tensor = totensor(image).unsqueeze(0).to(device)
 
         B,C,H,W = input_tensor.size()
         zshape = [B, C * (args.scale**2 - 1), H, W]
 
-        best_psnr = 0;
+        best_loss = 0;
         for i in range(10):
             with torch.no_grad():
                 y_forw = torch.cat((input_tensor, gaussian_batch(zshape).to(device)), dim=1)
                 output_tensor = model(x=y_forw, rev=True)[:, :3, :, :]
                 LR_fake = model(x=output_tensor)[:, :3, :, :]
-                psnr = PSNR(input_tensor, LR_fake).item()
-                if (psnr > best_psnr):
-                    best_psnr = psnr
+                loss = L1Loss()(input_tensor, LR_fake).item()
+                if (loss > best_loss):
+                    best_loss = loss
                     final_output_tensor = output_tensor.cpu()
         final_output_tensor.clamp_(0, 1.0)
         final_output_tensor = final_output_tensor.squeeze(0)
@@ -79,4 +91,4 @@ if __name__ == "__main__":
         del input_tensor, output_tensor, final_output_tensor
         torch.cuda.empty_cache()
 
-        progress_bar.set_postfix(PSNR='{:.2f}'.format(best_psnr))
+        progress_bar.set_postfix(loss='{:.2f}'.format(best_loss))

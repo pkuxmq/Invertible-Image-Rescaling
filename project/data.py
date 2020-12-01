@@ -17,6 +17,7 @@ import torch.utils.data as data
 import torchvision.transforms as T
 import torchvision.utils as utils
 from PIL import Image
+import pdb
 
 train_dataset_rootdir = "dataset/train/"
 test_dataset_rootdir = "dataset/test/"
@@ -36,7 +37,7 @@ def get_transform(train=True):
 
 def random_crop(LR, HR):
     # Patch Size
-    PATCH_SIZE = 64
+    PATCH_SIZE = 32
     H, W = LR.shape[1:]
     h = random.randint(0, H - PATCH_SIZE)
     w = random.randint(0, W - PATCH_SIZE)
@@ -89,6 +90,48 @@ class ImageZoomDataset(data.Dataset):
             tmp, self.transforms.__repr__().replace('\n', '\n' + ' ' * len(tmp)))
         return fmt_str
 
+class ZeroShotImageZoomDataset(data.Dataset):
+    """Define dataset."""
+
+    def __init__(self, image_file_name, transforms=get_transform()):
+        """Init dataset."""
+        super(ZeroShotImageZoomDataset, self).__init__()
+        self.transforms = transforms
+        self.image_file_name = image_file_name
+
+    def __getitem__(self, idx):
+        """Load images."""
+        hr = Image.open(self.image_file_name).convert("RGB")
+        W, H = hr.size
+        lr = hr.resize((W//4, H//4), Image.ANTIALIAS)
+        if self.transforms is not None:
+            hr = self.transforms(hr)
+            lr = self.transforms(lr)
+        lr, hr = random_crop(lr, hr)
+        return lr, hr
+
+    def __len__(self):
+        """Return total numbers of images."""
+        return 1
+
+    def __repr__(self):
+        """
+        Return printable representation of the dataset object.
+        """
+        fmt_str = 'Dataset ' + self.__class__.__name__ + '\n'
+        fmt_str += '    Number of samples: {}\n'.format(self.__len__())
+        fmt_str += '    Image File Name: {}\n'.format(self.image_file_name)
+        tmp = '    Transforms: '
+        fmt_str += '{0}{1}\n'.format(
+            tmp, self.transforms.__repr__().replace('\n', '\n' + ' ' * len(tmp)))
+        return fmt_str
+
+def zeroshot_data(file_name):
+    """Get data loader for trainning & validating, bs means batch_size."""
+    ds = ZeroShotImageZoomDataset(file_name, get_transform(train=True))
+    # Define training and validation data loaders
+    dl = data.DataLoader(ds, batch_size=1, shuffle=True, num_workers=0)
+    return dl
 
 def train_data(bs):
     """Get data loader for trainning & validating, bs means batch_size."""
