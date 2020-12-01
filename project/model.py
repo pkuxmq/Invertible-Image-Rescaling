@@ -19,9 +19,16 @@ import torch
 import torch.nn as nn
 import torch.nn.functional as F
 from apex import amp
-from torch.utils.checkpoint import checkpoint_sequential
+# from torch.utils.checkpoint import checkpoint_sequential
 from tqdm import tqdm
 from model_helper import ImageZoomModel
+from data import gaussian_batch
+
+def PSNR(img1, img2):
+    """PSNR."""
+    difference = (1.*img1-img2)**2
+    mse = torch.sqrt(torch.mean(difference)) + 0.000001
+    return 20*torch.log10(1./mse)
 
 def model_load(model, path):
     """Load model."""
@@ -138,36 +145,99 @@ class Counter(object):
         self.avg = self.sum / self.count
 
 
-def train_epoch(loader, model, optimizer, device, tag=''):
+class L2Loss(nn.Module):
+    def __init__(self):
+        super(L2Loss, self).__init__()
+
+    def forward(self, x, target):
+        return torch.mean(torch.sum((x - target)**2, (1, 2, 3)))
+
+class L1Loss(nn.Module):
+    def __init__(self, eps=1e-6):
+        super(L1Loss, self).__init__()
+        self.eps = eps
+
+    def forward(self, x, target):
+        diff = x - target
+        return torch.mean(torch.sum(torch.sqrt(diff * diff + self.eps), (1, 2, 3)))
+
+
+# def loss_forward(output, y, z, scale=4.0):
+#     # output, y, z = output[:, :3, :, :], LR, output[:, 3:, :, :]
+#     l_forw_fit = (scale ** 2) * L2Loss()(output, y)
+#     z = z.reshape([output.shape[0], -1])
+#     l_forw_ce = 1.0 * torch.sum(z**2) / z.shape[0]
+#     return l_forw_fit, l_forw_ce
+
+# def loss_backward(model, x, y):
+#     x_samples = model(x=y, rev=True)
+#     # (Pdb) x_samples.size()
+#     # torch.Size([8, 3, 246, 256])
+#     l_back_rec = 1.0 * L1Loss()(x, x_samples)
+#     return l_back_rec
+
+def train_epoch(loader, model, optimizer, device, scale, tag=''):
     """Trainning model ..."""
 
     total_loss = Counter()
-
     model.train()
+
+    forward_loss = L2Loss()
+    backward_loss = L1Loss()
 
     with tqdm(total=len(loader.dataset)) as t:
         t.set_description(tag)
 
         for data in loader:
-            images, targets = data
-            count = len(images)
+            LR, HR = data
+            count = len(LR)
 
             # Transform data to device
-            images = images.to(device)
-            targets = targets.to(device)
+            LR = LR.to(device)
+            HR = HR.to(device)
 
-            predicts = model(images)
+            output = model(x=HR)
+            zshape = output[:, 3:, :, :].shape
+            # z -- output[:, 3:, :, :]
+            # torch.Size([2, 48, 64, 64])
+            # torch.Size([2, 45, 64, 64])
+            l_forw_fit = (scale ** 2) * forward_loss(output[:, :3, :, :], LR)
+            z = output[:, 3:, :, :].reshape([output.shape[0], -1])
+            l_forw_ce = 1.0 * torch.sum(z**2) / z.shape[0]
 
-            # xxxx--modify here
-            loss = nn.L1Loss(predicts, targets)
+            y_ = torch.cat((output[:, :3, :, :], gaussian_batch(zshape).to(device)), dim=1)
+            x_samples = model(x=y_, rev=True)
+            # (Pdb) x_samples.size()
+            # torch.Size([8, 3, 246, 256])
+            l_back_rec = 1.0 * backward_loss(HR, x_samples)
+
+            # total loss
+            loss = l_forw_fit + l_forw_ce + l_back_rec
 
             loss_value = loss.item()
             if not math.isfinite(loss_value):
                 print("Loss is {}, stopping training".format(loss_value))
-                sys.exit(1)
+                print("l_forw_fit is {}, l_forw_ce is {}, l_back_rec is {}".format( \
+                    l_forw_fit, l_forw_ce, l_back_rec))
+                print("LR.size is {}".format(LR.size()))
+                print("HR.size is {}".format(HR.size()))
+                print("output.size is {}".format(output.size()))
+                print("output.mean is {}, output.min is {}, output.max is {}".format(
+                    output.mean(), output.min(), output.max()))
+                print("y_.size is {}".format(y_.size()))
+                print("y_.mean is {}, y_.min is {}, y_.max is {}".format(
+                    y_.mean(), y_.min(), y_.max()))
+                print("x_samples.size is {}".format(x_samples.size()))
+                print("x_samples.mean is {}, x_samples.min is {}, x_samples.max is {}".format(
+                    x_samples.mean(), x_samples.min(), x_samples.max()))
+                pdb.set_trace()
 
+                sys.exit(1)
             # Update loss
             total_loss.update(loss_value, count)
+
+            del output, l_forw_fit, l_forw_ce, l_back_rec, y_, LR, HR, z
+            torch.cuda.empty_cache()
 
             t.set_postfix(loss='{:.6f}'.format(total_loss.avg))
             t.update(count)
@@ -175,15 +245,18 @@ def train_epoch(loader, model, optimizer, device, tag=''):
             # Optimizer
             optimizer.zero_grad()
             loss.backward()
+            # Lipschit condition !!!
+            # nn.utils.clip_grad_norm_(model.parameters(), 10.0)
             optimizer.step()
 
         return total_loss.avg
 
 
-def valid_epoch(loader, model, device, tag=''):
+def valid_epoch(loader, model, device, scale, tag=''):
     """Validating model  ..."""
 
-    valid_loss = Counter()
+    valid_lr_loss = Counter()
+    valid_hr_loss = Counter()
 
     model.eval()
 
@@ -191,22 +264,31 @@ def valid_epoch(loader, model, device, tag=''):
         t.set_description(tag)
 
         for data in loader:
-            images, targets = data
-            count = len(images)
+            LR, HR = data
+            count = len(LR)
 
             # Transform data to device
-            images = images.to(device)
-            targets = targets.to(device)
+            LR = LR.to(device)
+            HR = HR.to(device)
 
             # Predict results without calculating gradients
+            B,C,H,W = LR.size()
+            zshape = [B, C * (scale**2 - 1), H, W]
             with torch.no_grad():
-                predicts = model(images)
+                forw_L = model(x=HR)[:, :3, :, :]
+                y_forw = torch.cat((forw_L, gaussian_batch(zshape).to(device)), dim=1)
+                predicts = model(x=y_forw, rev=True)[:, :3, :, :]
 
-            # xxxx--modify here
-            valid_loss.update(loss_value, count)
-            t.set_postfix(loss='{:.6f}'.format(valid_loss.avg))
+            psnr_lr = PSNR(forw_L, LR)
+            psnr_hr = PSNR(HR, predicts)
+
+            valid_lr_loss.update(psnr_lr.item(), count)
+            valid_hr_loss.update(psnr_hr.item(), count)
+            t.set_postfix(loss='LR PSNR: {:.6f}, HR PSNR: {:.6f}'.format(valid_lr_loss.avg, valid_hr_loss.avg))
             t.update(count)
 
+            del LR, HR, forw_L, y_forw, predicts, psnr_lr, psnr_hr
+            torch.cuda.empty_cache()
 
 def model_device():
     """First call model_setenv. """

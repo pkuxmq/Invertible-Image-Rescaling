@@ -22,12 +22,16 @@ if __name__ == "__main__":
 
     parser = argparse.ArgumentParser()
     parser.add_argument('--checkpoint', type=str,
-                        default="models/ImageZoom.pth", help="checkpoint file")
-    parser.add_argument('--bs', type=int, default=1, help="batch size")
+                        default="models/ImageZoom_X4.pth", help="checkpoint file")
+    parser.add_argument('--scale', type=int, default=4, help="scale factor")
+    parser.add_argument('--bs', type=int, default=8, help="batch size")
     args = parser.parse_args()
 
+    if (args.scale == 2):
+        args.checkpoint = "models/ImageZoom_X2.pth"
+
     # get model
-    model = get_model()
+    model = get_model(args.scale)
     model_load(model, args.checkpoint)
     device = model_device()
     model.to(device)
@@ -36,4 +40,4 @@ if __name__ == "__main__":
 
     print("Start testing ...")
     test_dl = get_data(trainning=False, bs=args.bs)
-    valid_epoch(test_dl, model, device, tag='test')
+    valid_epoch(test_dl, model, device, args.scale, tag='test')

@@ -28,7 +28,7 @@ if __name__ == "__main__":
                         default="models/ImageZoom_X4.pth", help="checkpint file")
     parser.add_argument('--input', type=str,
                         default="dataset/predict/LR/*.png", help="input image")
-    parser.add_argument('--scale', type=int, default=2, help="scale factor")
+    parser.add_argument('--scale', type=int, default=4, help="scale factor")
     parser.add_argument('--output', type=str,
                         default="dataset/predict/HR", help="output directory")
 
@@ -62,7 +62,7 @@ if __name__ == "__main__":
         zshape = [B, C * (args.scale**2 - 1), H, W]
 
         with torch.no_grad():
-            output_tensor = model(input_tensor)
+            # output_tensor = model(input_tensor)
             y_forw = torch.cat((input_tensor, gaussian_scale * gaussian_batch(zshape).to(device)), dim=1)
             output_tensor = model(x=y_forw, rev=True)[:, :3, :, :]
 

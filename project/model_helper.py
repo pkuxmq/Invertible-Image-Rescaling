@@ -75,6 +75,12 @@ class DenseBlock(nn.Module):
         x4 = self.lrelu(self.conv4(torch.cat((x, x1, x2, x3), 1)))
         x5 = self.conv5(torch.cat((x, x1, x2, x3, x4), 1))
 
+        if not math.isfinite(x5.mean().item()):
+            pdb.set_trace()
+            
+        del x1, x2, x3, x4
+        torch.cuda.empty_cache()
+
         return x5
 
 
@@ -122,13 +128,16 @@ class InvBlockExp(nn.Module):
         if not rev:
             # forward
             y1 = x1 + self.F(x2)
-            self.s = self.clamp * (torch.sigmoid(self.H(y1)) * 2 - 1)
-            y2 = x2.mul(torch.exp(self.s)) + self.G(y1)
+            s = self.clamp * (torch.sigmoid(self.H(y1)) * 2 - 1)
+            y2 = x2.mul(torch.exp(s)) + self.G(y1)
         else:
             # backward
-            self.s = self.clamp * (torch.sigmoid(self.H(x1)) * 2 - 1)
-            y2 = (x2 - self.G(x1)).div(torch.exp(self.s))
+            s = self.clamp * (torch.sigmoid(self.H(x1)) * 2 - 1)
+            y2 = (x2 - self.G(x1)).div(torch.exp(s))
             y1 = x1 - self.F(y2)
+
+        del s
+        torch.cuda.empty_cache()
 
         return torch.cat((y1, y2), 1)
 
@@ -210,4 +219,7 @@ class ImageZoomModel(nn.Module):
         else:
             for op in reversed(self.operations):
                 out = op.forward(out, rev)
+        if not math.isfinite(out.mean().item()):
+            pdb.set_trace()
+
         return out
