@@ -160,7 +160,7 @@ class IRNModel(BaseModel):
         self.netG.eval()
         with torch.no_grad():
             LR_img = self.netG(x=HR_img)[:, :3, :, :]
-            LR_img = self.Quantization(self.forw_L)
+            LR_img = self.Quantization(LR_img)
         self.netG.train()
 
         return LR_img
