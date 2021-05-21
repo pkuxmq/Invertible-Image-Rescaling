@@ -11,7 +11,7 @@ This is the PyTorch implementation of paper: Invertible Image Rescaling (ECCV 20
   - PyTorch == 1.0: `pip install tensorboardX`
   
 ## Dataset Preparation
-Commonly used training and testing datasets can be downloaded [here](https://github.com/xinntao/BasicSR/wiki/Prepare-datasets-in-LMDB-format).
+Commonly used training and testing datasets can be downloaded [here](https://github.com/xinntao/BasicSR/blob/master/docs/DatasetPreparation.md).
 
 ## Get Started
 Training and testing codes are in ['codes/'](./codes/). Please see ['codes/README.md'](./codes/README.md) for basic usages.
