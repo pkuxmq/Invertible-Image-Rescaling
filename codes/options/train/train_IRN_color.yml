@@ -1,0 +1,86 @@
+
+#### general settings
+
+name: 01_IRNcolor_DB_scratch_DIV2K
+use_tb_logger: true
+model: IRN-Color
+distortion: sr
+scale: 2
+gpu_ids: [0]
+
+
+#### datasets
+
+datasets:
+  train:
+    name: DIV2K
+    mode: LQGT
+    dataroot_GT: ~ # path to training HR images
+
+    use_shuffle: true
+    n_workers: 6  # per GPU
+    batch_size: 8
+    GT_size: 144
+    use_flip: true
+    use_rot: true
+    color: RGB
+    use_grey: True
+
+  val:
+    name: val_DIV2K
+    mode: LQGT
+    dataroot_GT: ~ # path to validation HR images
+    use_grey: True
+
+
+#### network structures
+
+network_grey:
+  which_model:
+      rgb_type: RGB
+      subnet_type: DBNet
+  block_num: [8]
+  init: xavier
+  Conv1x1Grey_learnable: True
+
+
+#### path
+
+path:
+  pretrain_model_G: ~ 
+  strict_load: true
+  resume_state: ~
+
+
+#### training settings: learning rate scheme, loss
+
+train:
+  lr_G: !!float 2e-4
+  beta1: 0.9
+  beta2: 0.999
+  niter: 500000
+  warmup_iter: -1  # no warm up
+
+  lr_scheme: MultiStepLR
+  lr_steps: [100000, 200000, 300000, 400000]
+  lr_gamma: 0.5
+
+  pixel_criterion_forw: l2
+  pixel_criterion_back: l1
+
+  manual_seed: 10
+
+  val_freq: !!float 5e3
+
+  lambda_fit_forw: 3.
+  lambda_rec_back: 1
+  lambda_ce_forw: 1
+  weight_decay_G: !!float 1e-5
+  gradient_clipping: 10
+
+
+#### logger
+
+logger:
+  print_freq: 100
+  save_checkpoint_freq: !!float 5e3

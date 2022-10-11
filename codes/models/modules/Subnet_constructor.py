@@ -29,13 +29,13 @@ class DenseBlock(nn.Module):
         return x5
 
 
-def subnet(net_structure, init='xavier'):
+def subnet(net_structure, init='xavier', gc=32):
     def constructor(channel_in, channel_out):
         if net_structure == 'DBNet':
             if init == 'xavier':
-                return DenseBlock(channel_in, channel_out, init)
+                return DenseBlock(channel_in, channel_out, init, gc=gc)
             else:
-                return DenseBlock(channel_in, channel_out)
+                return DenseBlock(channel_in, channel_out, gc=gc)
         else:
             return None
 

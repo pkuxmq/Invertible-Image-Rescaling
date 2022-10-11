@@ -4,7 +4,7 @@ model: IRN+
 distortion: sr
 scale: 4
 crop_border: ~  # crop border when evaluation. If None(~), crop the scale pixels
-gpu_ids: [1]
+gpu_ids: [0]
 
 datasets:
   test_1:  # the 1st test dataset

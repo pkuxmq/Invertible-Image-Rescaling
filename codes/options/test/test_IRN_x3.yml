@@ -1,8 +1,8 @@
-name: IRN_x4
+name: IRN_x3
 suffix: ~  # add suffix to saved images
 model: IRN
 distortion: sr
-scale: 4
+scale: 3
 crop_border: ~  # crop border when evaluation. If None(~), crop the scale pixels
 gpu_ids: [0]
 
@@ -38,13 +38,14 @@ datasets:
 network_G:
   which_model_G:
     subnet_type: DBNet
+    use_ConvDownsampling: True
   in_nc: 3
   out_nc: 3
-  block_num: [8, 8]
-  scale: 4
+  block_num: [12]
+  scale: 3
   init: xavier
 
 
 #### path
 path:
-  pretrain_model_G: ../experiments/pretrained_models/IRN_x4.pth
+  pretrain_model_G: ../experiments/pretrained_models/IRN_x3.pth

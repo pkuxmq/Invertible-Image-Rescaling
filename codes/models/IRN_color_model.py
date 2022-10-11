@@ -9,13 +9,12 @@ import models.lr_scheduler as lr_scheduler
 from .base_model import BaseModel
 from models.modules.loss import ReconstructionLoss
 from models.modules.Quantization import Quantization
-import numpy as np
 
 logger = logging.getLogger('base')
 
-class IRNModel(BaseModel):
+class IRNColorModel(BaseModel):
     def __init__(self, opt):
-        super(IRNModel, self).__init__(opt)
+        super(IRNColorModel, self).__init__(opt)
 
         if opt['dist']:
             self.rank = torch.distributed.get_rank()
@@ -26,7 +25,7 @@ class IRNModel(BaseModel):
         self.train_opt = train_opt
         self.test_opt = test_opt
 
-        self.netG = networks.define_G(opt).to(self.device)
+        self.netG = networks.define_grey(opt).to(self.device)
         if opt['dist']:
             self.netG = DistributedDataParallel(self.netG, device_ids=[torch.cuda.current_device()])
         else:
@@ -80,7 +79,7 @@ class IRNModel(BaseModel):
             self.log_dict = OrderedDict()
 
     def feed_data(self, data):
-        self.ref_L = data['LQ'].to(self.device)  # LQ
+        self.ref_Grey = data['Grey'].to(self.device)
         self.real_H = data['GT'].to(self.device)  # GT
 
     def gaussian_batch(self, dims):
@@ -105,27 +104,19 @@ class IRNModel(BaseModel):
     def optimize_parameters(self, step):
         self.optimizer_G.zero_grad()
 
-        # forward downscaling
+        # forward decolorization
         self.input = self.real_H
         self.output = self.netG(x=self.input)
 
-        zshape = self.output[:, 3:, :, :].shape
-        LR_ref = self.ref_L.detach()
+        zshape = self.output[:, 1:, :, :].shape
+        Grey_ref = self.ref_Grey.detach()
 
-        l_forw_fit, l_forw_ce = self.loss_forward(self.output[:, :3, :, :], LR_ref, self.output[:, 3:, :, :])
+        l_forw_fit, l_forw_ce = self.loss_forward(self.output[:, :1, :, :], Grey_ref, self.output[:, 1:, :, :])
 
         # backward upscaling
-        LR = self.Quantization(self.output[:, :3, :, :])
-
-        if self.train_opt['add_noise_on_y']:
-            probability = self.train_opt['y_noise_prob']
-            noise_scale = self.train_opt['y_noise_scale']
-            prob = np.random.rand()
-            if prob < probability:
-                LR = LR + noise_scale * self.gaussian_batch(LR.shape)
-
-        gaussian_scale = self.train_opt['gaussian_scale'] if self.train_opt['gaussian_scale'] != None else 1
-        y_ = torch.cat((LR, gaussian_scale * self.gaussian_batch(zshape)), dim=1)
+        Grey = self.Quantization(self.output[:, :1, :, :])
+        gaussian_scale = self.train_opt['gaussian_scale'] if self.train_opt['gaussian_scale'] != None else 0
+        y_ = torch.cat((Grey, gaussian_scale * self.gaussian_batch(zshape)), dim=1)
 
         l_back_rec = self.loss_backward(self.real_H, y_)
 
@@ -145,55 +136,54 @@ class IRNModel(BaseModel):
         self.log_dict['l_back_rec'] = l_back_rec.item()
 
     def test(self):
-        Lshape = self.ref_L.shape
+        Lshape = self.ref_Grey.shape
 
-        input_dim = Lshape[1]
         self.input = self.real_H
 
-        zshape = [Lshape[0], input_dim * (self.opt['scale']**2) - Lshape[1], Lshape[2], Lshape[3]]
+        zshape = [Lshape[0], 2, Lshape[2], Lshape[3]]
 
-        gaussian_scale = 1
+        gaussian_scale = 0
         if self.test_opt and self.test_opt['gaussian_scale'] != None:
             gaussian_scale = self.test_opt['gaussian_scale']
 
         self.netG.eval()
         with torch.no_grad():
-            self.forw_L = self.netG(x=self.input)[:, :3, :, :]
+            self.forw_L = self.netG(x=self.input)[:, :1, :, :]
             self.forw_L = self.Quantization(self.forw_L)
             y_forw = torch.cat((self.forw_L, gaussian_scale * self.gaussian_batch(zshape)), dim=1)
             self.fake_H = self.netG(x=y_forw, rev=True)[:, :3, :, :]
 
         self.netG.train()
 
-    def downscale(self, HR_img):
+    def decolorize(self, img):
         self.netG.eval()
         with torch.no_grad():
-            LR_img = self.netG(x=HR_img)[:, :3, :, :]
-            LR_img = self.Quantization(LR_img)
+            Grey_img = self.netG(x=img)[:, :1, :, :]
+            Grey_img = self.Quantization(Grey_img)
         self.netG.train()
 
-        return LR_img
+        return Grey_img
 
-    def upscale(self, LR_img, scale, gaussian_scale=1):
-        Lshape = LR_img.shape
-        zshape = [Lshape[0], Lshape[1] * (scale**2 - 1), Lshape[2], Lshape[3]]
-        y_ = torch.cat((LR_img, gaussian_scale * self.gaussian_batch(zshape)), dim=1)
+    def colorize(self, Grey_img, gaussian_scale=0):
+        Lshape = Grey_img.shape
+        zshape = [Lshape[0], 2, Lshape[2], Lshape[3]]
+        y_ = torch.cat((Grey_img, gaussian_scale * self.gaussian_batch(zshape)), dim=1)
 
         self.netG.eval()
         with torch.no_grad():
-            HR_img = self.netG(x=y_, rev=True)[:, :3, :, :]
+            img = self.netG(x=y_, rev=True)[:, :3, :, :]
         self.netG.train()
 
-        return HR_img
+        return img
 
     def get_current_log(self):
         return self.log_dict
 
     def get_current_visuals(self):
         out_dict = OrderedDict()
-        out_dict['LR_ref'] = self.ref_L.detach()[0].float().cpu()
-        out_dict['SR'] = self.fake_H.detach()[0].float().cpu()
-        out_dict['LR'] = self.forw_L.detach()[0].float().cpu()
+        out_dict['Grey_ref'] = self.ref_Grey.detach()[0].float().cpu()
+        out_dict['Color'] = self.fake_H.detach()[0].float().cpu()
+        out_dict['Grey'] = self.forw_L.detach()[0].float().cpu()
         out_dict['GT'] = self.real_H.detach()[0].float().cpu()
         return out_dict
 

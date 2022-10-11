@@ -9,6 +9,10 @@ def create_model(opt):
         from .IRN_model import IRNModel as M
     elif model == 'IRN+':
         from .IRNp_model import IRNpModel as M
+    elif model == 'IRN-CRM':
+        from .IRN_model_CRM import IRNCRMModel as M
+    elif model == 'IRN-Color':
+        from .IRN_color_model import IRNColorModel as M
     else:
         raise NotImplementedError('Model [{:s}] not recognized.'.format(model))
     m = M(opt)

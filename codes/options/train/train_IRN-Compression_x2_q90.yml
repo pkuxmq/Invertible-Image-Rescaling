@@ -1,11 +1,11 @@
 
 #### general settings
 
-name: 01_IRN+_DB_x4_scratch_DIV2K
+name: 01_IRN-CRM_DB_x2_q90_scratch_DIV2K
 use_tb_logger: true
-model: IRN+
+model: IRN-CRM
 distortion: sr
-scale: 4
+scale: 2
 gpu_ids: [0]
 
 
@@ -40,20 +40,22 @@ network_G:
       subnet_type: DBNet
   in_nc: 3
   out_nc: 3
-  block_num: [8, 8]
-  scale: 4
+  block_num: [8]
+  scale: 2
   init: xavier
 
-network_D:
-  which_model_D: discriminator_vgg_128
+network_R:
   in_nc: 3
+  out_nc: 3
   nf: 64
+  nb: 8
+  gc: 32
 
 
 #### path
 
 path:
-  pretrain_model_G: ../experiments/pretrained_models/IRN_x4.pth
+  pretrain_model_G: ../experiments/pretrained_models/IRN_x2_finetune.pth
   strict_load: true
   resume_state: ~
 
@@ -61,39 +63,41 @@ path:
 #### training settings: learning rate scheme, loss
 
 train:
-  lr_G: !!float 1e-4
+  lr_G: !!float 2e-4
+  lr_R: !!float 2e-4
   beta1: 0.9
+  beta1_R: 0.9
   beta2: 0.999
-  niter: 400000
+  beta2_R: 0.999
+  niter: 50000
   warmup_iter: -1  # no warm up
 
   lr_scheme: MultiStepLR
-  lr_steps: [50000, 100000, 200000, 300000]
+  lr_steps: [10000, 20000, 30000, 40000]
   lr_gamma: 0.5
 
   pixel_criterion_forw: l2
   pixel_criterion_back: l1
-  feature_criterion: l1
-  feature_weight: 0.01
+  pixel_criterion_jpeg: l2
 
   manual_seed: 10
 
   val_freq: !!float 5e3
 
-  lambda_fit_forw: 16
-  lambda_rec_back: 0.01
-
-  gradient_clipping: 10
+  lambda_fit_forw: 4.
+  lambda_rec_back: 1
+  lambda_ce_forw: 1
   weight_decay_G: !!float 1e-5
+  gradient_clipping: 10
 
-  lr_D: !!float 1e-4
-  weight_decay_D: 0
-  beta1_D: 0.9
-  beta2_D: 0.99
-  gan_type: gan
-  gan_weight: !!float 1
-  D_update_ratio: 1
-  D_init_iters: 5000
+  jpg_quality: 90
+  lambda_rec_jpeg: 1
+  lambda_joint_back: 0
+  only_jpeg_reconstruction: True
+  add_joint_loss: False
+
+test:
+  jpg_quality: 90
 
 
 #### logger

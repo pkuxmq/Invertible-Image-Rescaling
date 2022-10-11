@@ -3,6 +3,7 @@ import logging
 import models.modules.discriminator_vgg_arch as SRGAN_arch
 from models.modules.Inv_arch import *
 from models.modules.Subnet_constructor import subnet
+from models.modules.RRDB import RRDBNet
 import math
 logger = logging.getLogger('base')
 
@@ -18,12 +19,50 @@ def define_G(opt):
         init = opt_net['init']
     else:
         init = 'xavier'
+    if opt_net['gc']:
+        gc = opt_net['gc']
+    else:
+        gc = 32
 
+    use_ConvDownsampling = False
+    down_first = False
     down_num = int(math.log(opt_net['scale'], 2))
 
-    netG = InvRescaleNet(opt_net['in_nc'], opt_net['out_nc'], subnet(subnet_type, init), opt_net['block_num'], down_num)
+    if which_model['use_ConvDownsampling']:
+        use_ConvDownsampling = True
+        down_first = True
+        down_num = 1
+    if which_model['down_first']:
+        down_first = True
+
+    netG = InvRescaleNet(opt_net['in_nc'], opt_net['out_nc'], subnet(subnet_type, init, gc=gc), opt_net['block_num'], down_num, use_ConvDownsampling=use_ConvDownsampling, down_first=down_first, down_scale=opt_net['scale'])
 
     return netG
+
+
+def define_R(opt):
+    opt_net = opt['network_R']
+    return RRDBNet(opt_net['in_nc'], opt_net['out_nc'], opt_net['nf'], opt_net['nb'], opt_net['gc'])
+
+
+# for Invertible decolorization-colorization
+def define_grey(opt):
+    opt_net = opt['network_grey']
+    which_model = opt_net['which_model']
+    rgb_type = which_model['rgb_type']
+    subnet_type = which_model['subnet_type']
+    if opt_net['init']:
+        init = opt_net['init']
+    else:
+        init = 'xavier'
+
+    Conv1x1Grey_learnable = True
+    if which_model['Conv1x1Grey_learnable'] == False:
+        Conv1x1Grey_learnable = False
+
+    net_grey = InvGreyNet(rgb_type, subnet(subnet_type, init), opt_net['block_num'], Conv1x1Grey_learnable)
+
+    return net_grey
 
 
 #### Discriminator

@@ -1,0 +1,49 @@
+name: IRN_color
+suffix: ~  # add suffix to saved images
+model: IRN-Color
+distortion: sr
+scale: 2
+crop_border: ~  # crop border when evaluation. If None(~), crop the scale pixels
+gpu_ids: [0]
+
+datasets:
+  test_1:  # the 1st test dataset
+    name: set5
+    mode: LQGT
+    dataroot_GT: ~ # path to test HR images
+    use_grey: True
+  test_2:  # the 2st test dataset
+    name: set14
+    mode: LQGT
+    dataroot_GT: ~ # path to test HR images
+    use_grey: True
+  test_3:  # the 3st test dataset
+    name: B100
+    mode: LQGT
+    dataroot_GT: ~ # path to test HR images
+    use_grey: True
+  test_4:  # the 3st test dataset
+    name: Urban100
+    mode: LQGT
+    dataroot_GT: ~ # path to test HR images
+    use_grey: True
+  test_5:
+    name: val_DIV2K
+    mode: LQGT
+    dataroot_GT: ~ # path to test HR images
+    use_grey: True
+
+
+#### network
+network_grey:
+  which_model:
+    rgb_type: RGB
+    subnet_type: DBNet
+  block_num: [8]
+  init: xavier
+  Conv1x1Grey_learnable: True
+
+
+#### path
+path:
+  pretrain_model_G: ../experiments/pretrained_models/IRN_color.pth

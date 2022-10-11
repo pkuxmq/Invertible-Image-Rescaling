@@ -1,5 +1,7 @@
 # Invertible Image Rescaling
-This is the PyTorch implementation of paper: Invertible Image Rescaling (ECCV 2020 Oral). [arxiv](https://arxiv.org/abs/2005.05650).
+This is the PyTorch implementation of paper: Invertible Image Rescaling (ECCV 2020 Oral). \[[link](https://link.springer.com/chapter/10.1007/978-3-030-58452-8_8)\]\[[arxiv](https://arxiv.org/abs/2005.05650)\].
+
+**2022/10 Update**: Our paper "Invertible Rescaling Network and Its Extensions" has been accepted by IJCV. \[[link](https://link.springer.com/article/10.1007/s11263-022-01688-4)\]\[[arxiv](https://arxiv.org/abs/2210.04188)\]. We update the repository for experiments in the paper. The previous version can be found in the ECCV branch.
 
 ## Dependencies and Installation
 - Python 3 (Recommend to use [Anaconda](https://www.anaconda.com/download/#linux))

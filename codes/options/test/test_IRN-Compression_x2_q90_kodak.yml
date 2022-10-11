@@ -1,0 +1,42 @@
+name: IRN-CRM_x2_q90
+suffix: ~  # add suffix to saved images
+model: IRN-CRM
+distortion: sr
+scale: 2
+crop_border: ~  # crop border when evaluation. If None(~), crop the scale pixels
+gpu_ids: [0]
+
+datasets:
+  test_1:  # the 1st test dataset
+    name: Kodak
+    mode: LQGT
+    dataroot_GT: ~ # path to test HR images
+    dataroot_LQ: ~ # path to test reference LR images, not necessary, if not provided, LR images will be generated in dataloader
+
+
+#### network
+network_G:
+  which_model_G:
+    subnet_type: DBNet
+  in_nc: 3
+  out_nc: 3
+  block_num: [8]
+  scale: 2
+  init: xavier
+
+network_R:
+  in_nc: 3
+  out_nc: 3
+  nf: 64
+  nb: 8
+  gc: 32
+
+
+test:
+  jpg_quality: 90
+
+
+#### path
+path:
+  pretrain_model_G: ../experiments/pretrained_models/IRN_x2_finetune_Kodak.pth
+  pretrain_model_R: ../experiments/pretrained_models/CRM_x2_q90.pth
