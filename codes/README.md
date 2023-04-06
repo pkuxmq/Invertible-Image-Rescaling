@@ -11,22 +11,22 @@ First set a config file in options/test/, then run as following:
 # Training for image decolorization-colorization
 First set a config file in options/train/, then run as following:
 
-	python train.py -opt options/train/train_IRN_color.yml
+	python train_IRN-Color.py -opt options/train/train_IRN_color.yml
 
 # Testing for image decolorization-colorization
 First set a config file in options/test/, then run as following:
 
-	python test.py -opt options/test/test_IRN_color.yml
+	python test_IRN-Color.py -opt options/test/test_IRN_color.yml
 
 # Training for combination with image compression
 First set a config file in options/train/, then run as following:
 
-	python train.py -opt options/train/train_IRN-Compression_x2_q90.yml
+	python train_IRN-Compression.py -opt options/train/train_IRN-Compression_x2_q90.yml
 
 # Testing for combination with image compression
 First set a config file in options/test/, then run as following:
 
-	python test.py -opt options/test/test_IRN-Compression_x2_q90.yml
+	python test_IRN-Compression.py -opt options/test/test_IRN-Compression_x2_q90.yml
 
 
 Pretrained models can be downloaded from [Google Drive](https://drive.google.com/drive/folders/1ym6DvYNQegDrOy_4z733HxrULa1XIN92?usp=sharing) or [Baidu Drive](https://pan.baidu.com/s/14OvTiJNhFpHHN2yU-h7vDg) (extraction code: rx0z).
